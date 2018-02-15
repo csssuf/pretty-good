@@ -1,5 +1,5 @@
 use failure::Error;
-use nom::{be_u8, be_u16, be_u32, ErrorKind};
+use nom::{ErrorKind, be_u16, be_u32, be_u8};
 use nom::IResult::{self, *};
 
 use signature::*;
@@ -70,7 +70,8 @@ fn new_tag_format(inp: (&[u8], usize)) -> IResult<(&[u8], usize), (u8, &[u8])> {
     IResult::Error(ErrorKind::Custom(1))
 }
 
-named!(pgp_packet_header<(u8, &[u8])>,
+named!(
+    pgp_packet_header<(u8, &[u8])>,
     bits!(preceded!(
         tag_bits!(u8, 1, 0b1),
         switch!(take_bits!(u8, 1),
@@ -105,13 +106,21 @@ impl Packet {
     pub fn from_bytes(bytes: &[u8]) -> Result<Packet, Error> {
         let (packet_tag, packet_data) = match pgp_packet_header(bytes) {
             Done(_, (tag, data)) => (tag, data),
-            Error(ErrorKind::Custom(1)) => bail!(PacketError::UnsupportedHeader { reason: format!("partial length") }),
-            Error(e) => bail!(PacketError::InvalidHeader { reason: format!("{}", e) }),
-            Incomplete(i) => bail!(PacketError::InvalidHeader { reason: format!("{:?}", i) }),
+            Error(ErrorKind::Custom(1)) => bail!(PacketError::UnsupportedHeader {
+                reason: format!("partial length"),
+            }),
+            Error(e) => bail!(PacketError::InvalidHeader {
+                reason: format!("{}", e),
+            }),
+            Incomplete(i) => bail!(PacketError::InvalidHeader {
+                reason: format!("{:?}", i),
+            }),
         };
 
         let packet = match packet_tag {
-            0 => bail!(PacketError::InvalidHeader { reason: format!("packet has reserved tag") }),
+            0 => bail!(PacketError::InvalidHeader {
+                reason: format!("packet has reserved tag"),
+            }),
             1 => Packet::PublicKeySessionKey,
             2 => Packet::Signature(SignaturePacket::from_bytes(packet_data)?),
             3 => Packet::SymmetricKeySessionKey,
@@ -129,7 +138,9 @@ impl Packet {
             17 => Packet::UserAttribute,
             18 => Packet::SymmetricEncryptedIntegrityProtectedData,
             19 => Packet::ModificationDetectionCode,
-            _ => bail!(PacketError::InvalidHeader { reason: format!("unknown tag") }),
+            _ => bail!(PacketError::InvalidHeader {
+                reason: format!("unknown tag"),
+            }),
         };
 
         Ok(packet)
@@ -138,8 +149,6 @@ impl Packet {
 
 #[derive(Debug, Fail)]
 pub enum PacketError {
-    #[fail(display = "Invalid packet header: {}", reason)]
-    InvalidHeader { reason: String },
-    #[fail(display = "Unsupported packet header: {}", reason)]
-    UnsupportedHeader { reason: String },
+    #[fail(display = "Invalid packet header: {}", reason)] InvalidHeader { reason: String },
+    #[fail(display = "Unsupported packet header: {}", reason)] UnsupportedHeader { reason: String },
 }
