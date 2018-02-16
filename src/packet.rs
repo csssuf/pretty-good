@@ -3,6 +3,7 @@ use nom::{ErrorKind, be_u16, be_u32, be_u8};
 use nom::IResult::{self, *};
 
 use signature::*;
+use types::NomError;
 
 named!(old_tag_format<(&[u8], usize), (u8, &[u8])>,
     do_parse!(
@@ -66,8 +67,7 @@ fn new_tag_format(inp: (&[u8], usize)) -> IResult<(&[u8], usize), (u8, &[u8])> {
     }
 
     // If we've gotten here, it's a partial-length packet, which we don't support (yet?).
-    // TODO: is there a better ErrorKind/custom value to use here?
-    IResult::Error(ErrorKind::Custom(1))
+    IResult::Error(ErrorKind::Custom(NomError::Unimplemented as u32))
 }
 
 named!(
@@ -106,9 +106,13 @@ impl Packet {
     pub fn from_bytes(bytes: &[u8]) -> Result<Packet, Error> {
         let (packet_tag, packet_data) = match pgp_packet_header(bytes) {
             Done(_, (tag, data)) => (tag, data),
-            Error(ErrorKind::Custom(1)) => bail!(PacketError::UnsupportedHeader {
-                reason: format!("partial length"),
-            }),
+            Error(ErrorKind::Custom(e)) => {
+                let e = NomError::from(e);
+
+                bail!(PacketError::UnsupportedHeader {
+                    reason: format!("{:?}", e),
+                })
+            }
             Error(e) => bail!(PacketError::InvalidHeader {
                 reason: format!("{}", e),
             }),
