@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["James Forcier <james.forcier@coreos.com>"]
 
 [dependencies]
+byteorder = "1.2"
 failure = "0.1"
 failure_derive = "0.1"
 nom = "^3.2"
