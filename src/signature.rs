@@ -390,7 +390,16 @@ impl Subpacket {
             _ => {}
         }
 
-        Ok(out)
+        let mut packet_len = if out.len() < 192 {
+            vec![out.len() as u8]
+        } else {
+            let mut packet_len = vec![255u8];
+            packet_len.write_u32::<BigEndian>(out.len() as u32)?;
+            packet_len
+        };
+
+        packet_len.append(&mut out);
+        Ok(packet_len)
     }
 }
 
