@@ -160,33 +160,31 @@ named!(signature<SignaturePacket>, alt!(v3_sig | v4_sig));
 
 #[derive(Clone, Debug)]
 pub struct SignaturePacket {
-    sig_type: SignatureType,
+    pub sig_type: SignatureType,
     timestamp: Option<Duration>,
     signer: Option<u64>,
-    pubkey_algo: PublicKeyAlgorithm,
-    hash_algo: HashAlgorithm,
-    hashed_subpackets: Vec<Subpacket>,
-    unhashed_subpackets: Vec<Subpacket>,
+    pub pubkey_algo: PublicKeyAlgorithm,
+    pub hash_algo: HashAlgorithm,
+    pub hashed_subpackets: Vec<Subpacket>,
+    pub unhashed_subpackets: Vec<Subpacket>,
     signature_contents: Vec<u8>,
 }
 
 impl SignaturePacket {
-    pub fn from_bytes(bytes: &[u8]) -> Result<SignaturePacket, Error> {
-        match signature(bytes) {
-            IResult::Done(_, sig) => Ok(sig),
-            IResult::Error(ErrorKind::Custom(e)) => {
-                let e = NomError::from(e);
-
-                bail!(SignatureError::InvalidFormat {
-                    reason: format!("{:?}", e),
-                })
-            }
-            IResult::Error(e) => bail!(SignatureError::InvalidFormat {
-                reason: format!("{}", e),
-            }),
-            IResult::Incomplete(i) => bail!(SignatureError::InvalidFormat {
-                reason: format!("{:?}", i),
-            }),
+    pub fn new(
+        sig_type: SignatureType,
+        pubkey_algo: PublicKeyAlgorithm,
+        hash_algo: HashAlgorithm,
+    ) -> SignaturePacket {
+        SignaturePacket {
+            sig_type: sig_type,
+            timestamp: None,
+            signer: None,
+            pubkey_algo: pubkey_algo,
+            hash_algo: hash_algo,
+            hashed_subpackets: Vec::new(),
+            unhashed_subpackets: Vec::new(),
+            signature_contents: Vec::new(),
         }
     }
 
@@ -225,6 +223,78 @@ impl SignaturePacket {
         }
 
         Ok(())
+    }
+
+    pub fn timestamp(&self) -> Option<Duration> {
+        find_timestamp(&self.hashed_subpackets)
+            .or(find_timestamp(&self.unhashed_subpackets))
+            .or(self.timestamp)
+    }
+
+    pub fn set_timestamp(&mut self, timestamp: Duration) {
+        self.hashed_subpackets.retain(|subpacket| {
+            if let &Subpacket::SignatureCreationTime(_) = subpacket {
+                false
+            } else {
+                true
+            }
+        });
+        self.unhashed_subpackets.retain(|subpacket| {
+            if let &Subpacket::SignatureCreationTime(_) = subpacket {
+                false
+            } else {
+                true
+            }
+        });
+
+        self.hashed_subpackets
+            .push(Subpacket::SignatureCreationTime(timestamp));
+        self.timestamp = Some(timestamp);
+    }
+
+    pub fn signer(&self) -> Option<u64> {
+        find_signer(&self.hashed_subpackets)
+            .or(find_signer(&self.unhashed_subpackets))
+            .or(self.signer)
+    }
+
+    pub fn set_signer(&mut self, signer: u64) {
+        self.hashed_subpackets.retain(|subpacket| {
+            if let &Subpacket::Issuer(_) = subpacket {
+                false
+            } else {
+                true
+            }
+        });
+        self.unhashed_subpackets.retain(|subpacket| {
+            if let &Subpacket::Issuer(_) = subpacket {
+                false
+            } else {
+                true
+            }
+        });
+
+        self.unhashed_subpackets.push(Subpacket::Issuer(signer));
+        self.signer = Some(signer);
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<SignaturePacket, Error> {
+        match signature(bytes) {
+            IResult::Done(_, sig) => Ok(sig),
+            IResult::Error(ErrorKind::Custom(e)) => {
+                let e = NomError::from(e);
+
+                bail!(SignatureError::InvalidFormat {
+                    reason: format!("{:?}", e),
+                })
+            }
+            IResult::Error(e) => bail!(SignatureError::InvalidFormat {
+                reason: format!("{}", e),
+            }),
+            IResult::Incomplete(i) => bail!(SignatureError::InvalidFormat {
+                reason: format!("{:?}", i),
+            }),
+        }
     }
 }
 
