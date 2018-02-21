@@ -216,8 +216,8 @@ impl SignaturePacket {
             }
             Signature::Dsa(r, s) => {
                 let mut r_vec = Vec::from(r.to_bytes(Format::Pgp)?.as_bytes());
-                let mut s_vec = Vec::from(s.to_bytes(Format::Pgp)?.as_bytes());
-                r_vec.append(&mut s_vec);
+                let s_vec = Vec::from(s.to_bytes(Format::Pgp)?.as_bytes());
+                r_vec.extend(&s_vec);
 
                 self.signature_contents = r_vec;
             }
@@ -398,7 +398,7 @@ impl Subpacket {
             packet_len
         };
 
-        packet_len.append(&mut out);
+        packet_len.extend(&out);
         Ok(packet_len)
     }
 }
