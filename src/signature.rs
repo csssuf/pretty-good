@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use failure::Error;
@@ -175,17 +175,19 @@ impl SignaturePacket {
         sig_type: SignatureType,
         pubkey_algo: PublicKeyAlgorithm,
         hash_algo: HashAlgorithm,
-    ) -> SignaturePacket {
-        SignaturePacket {
+    ) -> Result<SignaturePacket, Error> {
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?;
+
+        Ok(SignaturePacket {
             sig_type: sig_type,
-            timestamp: None,
+            timestamp: Some(timestamp),
             signer: None,
             pubkey_algo: pubkey_algo,
             hash_algo: hash_algo,
             hashed_subpackets: Vec::new(),
             unhashed_subpackets: Vec::new(),
             signature_contents: Vec::new(),
-        }
+        })
     }
 
     pub fn contents(&self) -> Result<Signature, Error> {
