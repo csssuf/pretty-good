@@ -7,4 +7,5 @@ authors = ["James Forcier <james.forcier@coreos.com>"]
 byteorder = "1.2"
 failure = "0.1"
 failure_derive = "0.1"
+gcrypt = "0.5"
 nom = "^3.2"

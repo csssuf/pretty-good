@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use failure::Error;
+use gcrypt::mpi::integer::{Format, Integer};
 use nom::{rest, be_u16, be_u32, be_u64, be_u8};
 use nom::{ErrorKind, IResult};
 
@@ -188,6 +189,43 @@ impl SignaturePacket {
             }),
         }
     }
+
+    pub fn contents(&self) -> Result<Signature, Error> {
+        match self.pubkey_algo {
+            PublicKeyAlgorithm::Rsa
+            | PublicKeyAlgorithm::RsaEncryptOnly
+            | PublicKeyAlgorithm::RsaSignOnly => {
+                let mpi = Integer::from_bytes(Format::Pgp, &self.signature_contents)?;
+                Ok(Signature::Rsa(mpi))
+            }
+            PublicKeyAlgorithm::Dsa => {
+                let mpi_r = Integer::from_bytes(Format::Pgp, &self.signature_contents)?;
+                let s_pos = mpi_r.len_encoded(Format::Pgp)?;
+                let mpi_s = Integer::from_bytes(Format::Pgp, &self.signature_contents[s_pos..])?;
+
+                Ok(Signature::Dsa(mpi_r, mpi_s))
+            }
+            _ => Ok(Signature::Unknown(self.signature_contents.clone())),
+        }
+    }
+
+    pub fn set_contents(&mut self, sig: Signature) -> Result<(), Error> {
+        match sig {
+            Signature::Rsa(mpi) => {
+                self.signature_contents = Vec::from(mpi.to_bytes(Format::Pgp)?.as_bytes())
+            }
+            Signature::Dsa(r, s) => {
+                let mut r_vec = Vec::from(r.to_bytes(Format::Pgp)?.as_bytes());
+                let mut s_vec = Vec::from(s.to_bytes(Format::Pgp)?.as_bytes());
+                r_vec.append(&mut s_vec);
+
+                self.signature_contents = r_vec;
+            }
+            Signature::Unknown(payload) => self.signature_contents = payload.clone(),
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -282,6 +320,13 @@ impl Subpacket {
 
         Ok(out)
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Signature {
+    Rsa(Integer),
+    Dsa(Integer, Integer),
+    Unknown(Vec<u8>),
 }
 
 #[derive(Debug, Fail)]
