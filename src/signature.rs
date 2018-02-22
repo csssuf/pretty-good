@@ -5,6 +5,7 @@ use failure::Error;
 use gcrypt::mpi::integer::{Format, Integer};
 use nom::{rest, be_u16, be_u32, be_u64, be_u8};
 use nom::{ErrorKind, IResult};
+use nom::Err as NomErr;
 
 use types::*;
 
@@ -78,11 +79,17 @@ fn parse_subpacket(inp: &[u8]) -> IResult<&[u8], Subpacket> {
     };
 
     match subpacket_type {
-        0 | 1 | 8 | 13 | 14 | 15 | 17 | 18 | 19 => IResult::Error(ErrorKind::Custom(2)),
+        0 | 1 | 8 | 13 | 14 | 15 | 17 | 18 | 19 => IResult::Error(NomErr::Code(
+            ErrorKind::Custom(NomError::UseOfReservedValue as u32),
+        )),
         2 => {
             let time_secs = match packet_contents.read_u32::<BigEndian>() {
                 Ok(val) => val,
-                Err(_) => return IResult::Error(ErrorKind::Custom(3)),
+                Err(_) => {
+                    return IResult::Error(NomErr::Code(ErrorKind::Custom(
+                        NomError::IntegerReadError as u32,
+                    )))
+                }
             };
             let subpacket =
                 Subpacket::SignatureCreationTime(Duration::from_secs(u64::from(time_secs)));
@@ -91,7 +98,11 @@ fn parse_subpacket(inp: &[u8]) -> IResult<&[u8], Subpacket> {
         3 => {
             let time_secs = match packet_contents.read_u32::<BigEndian>() {
                 Ok(val) => val,
-                Err(_) => return IResult::Error(ErrorKind::Custom(3)),
+                Err(_) => {
+                    return IResult::Error(NomErr::Code(ErrorKind::Custom(
+                        NomError::IntegerReadError as u32,
+                    )))
+                }
             };
             let subpacket =
                 Subpacket::SignatureExpirationTime(Duration::from_secs(u64::from(time_secs)));
@@ -100,7 +111,11 @@ fn parse_subpacket(inp: &[u8]) -> IResult<&[u8], Subpacket> {
         16 => {
             let issuer = match packet_contents.read_u64::<BigEndian>() {
                 Ok(val) => val,
-                Err(_) => return IResult::Error(ErrorKind::Custom(3)),
+                Err(_) => {
+                    return IResult::Error(NomErr::Code(ErrorKind::Custom(
+                        NomError::IntegerReadError as u32,
+                    )))
+                }
             };
             let subpacket = Subpacket::Issuer(issuer);
             IResult::Done(remaining, subpacket)
@@ -293,7 +308,7 @@ impl SignaturePacket {
     pub fn from_bytes(bytes: &[u8]) -> Result<SignaturePacket, Error> {
         match signature(bytes) {
             IResult::Done(_, sig) => Ok(sig),
-            IResult::Error(ErrorKind::Custom(e)) => {
+            IResult::Error(NomErr::Code(ErrorKind::Custom(e))) => {
                 let e = NomError::from(e);
 
                 bail!(SignatureError::InvalidFormat {
