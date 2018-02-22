@@ -171,6 +171,8 @@ pub struct SignaturePacket {
 }
 
 impl SignaturePacket {
+    /// Create a new signature with the given parameters. The new signature's creation time will be
+    /// set to the current system time, and the contents will be empty.
     pub fn new(
         sig_type: SignatureType,
         pubkey_algo: PublicKeyAlgorithm,
@@ -190,6 +192,9 @@ impl SignaturePacket {
         })
     }
 
+    /// Retrieve the contents of this signature. For RSA signatures, this is a single
+    /// multiprecision integer representing `m^d mod n`; for DSA signatures this is two
+    /// multiprecision integers representing `r` and `s`.
     pub fn contents(&self) -> Result<Signature, Error> {
         match self.pubkey_algo {
             PublicKeyAlgorithm::Rsa
@@ -209,6 +214,7 @@ impl SignaturePacket {
         }
     }
 
+    /// Set the contents of this signature.
     pub fn set_contents(&mut self, sig: Signature) -> Result<(), Error> {
         match sig {
             Signature::Rsa(mpi) => {
@@ -227,12 +233,14 @@ impl SignaturePacket {
         Ok(())
     }
 
+    /// Retrive the creation time of this signature.
     pub fn timestamp(&self) -> Option<Duration> {
         find_timestamp(&self.hashed_subpackets)
             .or_else(|| find_timestamp(&self.unhashed_subpackets))
             .or(self.timestamp)
     }
 
+    /// Set the creation time of this signature.
     pub fn set_timestamp(&mut self, timestamp: Duration) {
         self.hashed_subpackets.retain(|subpacket| {
             if let Subpacket::SignatureCreationTime(_) = *subpacket {
@@ -254,12 +262,14 @@ impl SignaturePacket {
         self.timestamp = Some(timestamp);
     }
 
+    /// Retrieve the key ID of this signature's issuer.
     pub fn signer(&self) -> Option<u64> {
         find_signer(&self.hashed_subpackets)
             .or_else(|| find_signer(&self.unhashed_subpackets))
             .or(self.signer)
     }
 
+    /// Set the key ID of this signature's issuer.
     pub fn set_signer(&mut self, signer: u64) {
         self.hashed_subpackets.retain(|subpacket| {
             if let Subpacket::Issuer(_) = *subpacket {
