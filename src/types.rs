@@ -1,3 +1,6 @@
+use asn1::ObjectIdentifier;
+use failure::Error;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum PublicKeyAlgorithm {
@@ -30,6 +33,23 @@ impl From<u8> for PublicKeyAlgorithm {
     }
 }
 
+impl From<PublicKeyAlgorithm> for u8 {
+    fn from(val: PublicKeyAlgorithm) -> u8 {
+        match val {
+            PublicKeyAlgorithm::Rsa => 1,
+            PublicKeyAlgorithm::RsaEncryptOnly => 2,
+            PublicKeyAlgorithm::RsaSignOnly => 3,
+            PublicKeyAlgorithm::ElgamalEncryptOnly => 16,
+            PublicKeyAlgorithm::Dsa => 17,
+            PublicKeyAlgorithm::EllipticCurve => 18,
+            PublicKeyAlgorithm::Ecdsa => 19,
+            PublicKeyAlgorithm::Elgamal => 20,
+            PublicKeyAlgorithm::DiffieHellman => 21,
+            PublicKeyAlgorithm::Unknown => 0xFF,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum HashAlgorithm {
@@ -58,6 +78,39 @@ impl From<u8> for HashAlgorithm {
     }
 }
 
+impl From<HashAlgorithm> for u8 {
+    fn from(val: HashAlgorithm) -> u8 {
+        match val {
+            HashAlgorithm::Md5 => 1,
+            HashAlgorithm::Sha1 => 2,
+            HashAlgorithm::Ripemd160 => 3,
+            HashAlgorithm::Sha256 => 8,
+            HashAlgorithm::Sha384 => 9,
+            HashAlgorithm::Sha512 => 10,
+            HashAlgorithm::Sha224 => 11,
+            HashAlgorithm::Unknown => 0xFF,
+        }
+    }
+}
+
+impl HashAlgorithm {
+    pub fn asn1_oid(&self) -> Result<ObjectIdentifier, Error> {
+        let oid_vec = match *self {
+            HashAlgorithm::Md5 => vec![1, 2, 840, 113549, 2, 5],
+            HashAlgorithm::Sha1 => vec![1, 3, 14, 3, 2, 26],
+            HashAlgorithm::Ripemd160 => vec![1, 3, 36, 3, 2, 1],
+            HashAlgorithm::Sha256 => vec![2, 16, 840, 1, 101, 3, 4, 2, 1],
+            HashAlgorithm::Sha384 => vec![2, 16, 840, 1, 101, 3, 4, 2, 2],
+            HashAlgorithm::Sha512 => vec![2, 16, 840, 1, 101, 3, 4, 2, 3],
+            HashAlgorithm::Sha224 => vec![2, 16, 840, 1, 101, 3, 4, 2, 4],
+            HashAlgorithm::Unknown => bail!(AlgorithmError::HashAlgorithmError),
+        };
+
+        ObjectIdentifier::new(oid_vec)
+            .ok_or(AlgorithmError::HashAlgorithmError.into())
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub(crate) enum NomError {
@@ -76,4 +129,12 @@ impl From<u32> for NomError {
             _ => NomError::Unknown,
         }
     }
+}
+
+#[derive(Clone, Debug, Fail)]
+pub enum AlgorithmError {
+    #[fail(display = "unknown public key algorithm")]
+    PublicKeyAlgorithmError,
+    #[fail(display = "unknown hash algorithm")]
+    HashAlgorithmError,
 }

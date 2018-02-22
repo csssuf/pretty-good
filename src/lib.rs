@@ -1,3 +1,4 @@
+extern crate asn1;
 extern crate byteorder;
 #[macro_use]
 extern crate failure;

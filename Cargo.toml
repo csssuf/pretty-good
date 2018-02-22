@@ -9,6 +9,9 @@ failure = "0.1"
 failure_derive = "0.1"
 gcrypt = "0.5"
 
+[dependencies.asn1]
+git = "https://github.com/csssuf/rust-asn1"
+
 [dependencies.nom]
 version = "^3.2"
 features = ["verbose-errors"]
