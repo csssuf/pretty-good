@@ -305,6 +305,97 @@ impl SignaturePacket {
         self.signer = Some(signer);
     }
 
+    fn common_header(&self) -> Result<Vec<u8>, Error> {
+        let mut header = Vec::new();
+
+        // Signature version 4
+        header.push(4);
+        header.push(self.sig_type.into());
+        header.push(self.pubkey_algo.into());
+        header.push(self.hash_algo.into());
+
+        // Since we may be an old (v3) signature packet, but we only emit new (v4) signature
+        // packets, ensure that there is a hashed subpacket with the timestamp available, since a
+        // signature _must_ have a timestamp hashed subpacket. However, we do not want to save this
+        // new hashed subpacket in this signature's real list, so we forget about it after this
+        // function.
+        let mut hashed_subpackets = self.hashed_subpackets.clone();
+        match find_timestamp(&self.hashed_subpackets) {
+            Some(_) => {}
+            None => match self.timestamp {
+                Some(timestamp) => {
+                    hashed_subpackets.push(Subpacket::SignatureCreationTime(timestamp))
+                }
+                None => bail!(SignatureError::Unusable {
+                    reason: "no SignatureCreationTime".to_string(),
+                }),
+            },
+        }
+
+        let mut hashed_subpackets_bytes: Vec<u8> = Vec::new();
+        for packet in &hashed_subpackets {
+            let packet_bytes = packet.to_bytes()?;
+            hashed_subpackets_bytes.extend(&packet_bytes);
+        }
+        // The hashed subpackets are preceded by a two-octet big-endian value representing the
+        // total length of all hashed subpackets.
+        header.write_u16::<BigEndian>(hashed_subpackets_bytes.len() as u16)?;
+        header.extend(&hashed_subpackets_bytes);
+
+        Ok(header)
+    }
+
+    /// Build a payload suitable for signing. Note that this payload must still be hashed with
+    /// `hash_algo` and placed in an ASN.1 DigestInfo structure prior to signing, which is outside
+    /// the scope of this library.
+    pub fn signable_payload<T: AsRef<[u8]>>(&self, payload: T) -> Result<Vec<u8>, Error> {
+        let mut signing_payload = Vec::from(payload.as_ref());
+
+        let common_header = self.common_header()?;
+        signing_payload.extend(&common_header);
+
+        // From RFC4880, Section 5.2.4:
+        // V4 signatures also hash in a final trailer of six octets: the
+        // version of the Signature packet, i.e., 0x04; 0xFF; and a four-octet,
+        // big-endian number that is the length of the hashed data from the
+        // Signature packet (note that this number does not include these final
+        // six octets).
+        let mut suffix = Vec::new();
+        suffix.push(0x04);
+        suffix.push(0xFF);
+        suffix.write_u32::<BigEndian>(common_header.len() as u32)?;
+        signing_payload.extend(&suffix);
+
+        Ok(signing_payload)
+    }
+
+    /// Retrieve the header for this signature, i.e. everything except the MPI contents of the
+    /// signature.
+    pub fn header(&self) -> Result<Vec<u8>, Error> {
+        let mut header = self.common_header()?;
+
+        let mut unhashed_subpackets_bytes: Vec<u8> = Vec::new();
+        for packet in &self.unhashed_subpackets {
+            let packet_bytes = packet.to_bytes()?;
+            unhashed_subpackets_bytes.extend(&packet_bytes);
+        }
+        // The unhashed subpackets are preceded by a two-octet big-endian value representing the
+        // total length of all unhashed subpackets.
+        header.write_u16::<BigEndian>(unhashed_subpackets_bytes.len() as u16)?;
+        header.extend(&unhashed_subpackets_bytes);
+
+        Ok(header)
+    }
+
+    /// Serialize this signature to bytes.
+    pub fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut out = self.header()?;
+        out.extend(&self.signature_contents);
+
+        Ok(out)
+    }
+
+    /// Read in a signature from some bytes.
     pub fn from_bytes(bytes: &[u8]) -> Result<SignaturePacket, Error> {
         match signature(bytes) {
             IResult::Done(_, sig) => Ok(sig),
@@ -365,6 +456,29 @@ impl From<u8> for SignatureType {
             0x40 => SignatureType::Timestamp,
             0x50 => SignatureType::ThirdPartyConfirmation,
             _ => SignatureType::Unknown,
+        }
+    }
+}
+
+impl From<SignatureType> for u8 {
+    fn from(val: SignatureType) -> u8 {
+        match val {
+            SignatureType::BinaryDocument => 0x00,
+            SignatureType::TextDocument => 0x01,
+            SignatureType::Standalone => 0x02,
+            SignatureType::GenericCertification => 0x10,
+            SignatureType::PersonaCertification => 0x11,
+            SignatureType::CasualCertification => 0x12,
+            SignatureType::PositiveCertification => 0x13,
+            SignatureType::SubkeyBinding => 0x18,
+            SignatureType::PrimaryKeyBinding => 0x19,
+            SignatureType::DirectKey => 0x1F,
+            SignatureType::KeyRevocation => 0x20,
+            SignatureType::SubkeyRevocation => 0x28,
+            SignatureType::CertificationRevocation => 0x30,
+            SignatureType::Timestamp => 0x40,
+            SignatureType::ThirdPartyConfirmation => 0x50,
+            SignatureType::Unknown => 0xFF,
         }
     }
 }
