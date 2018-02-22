@@ -153,6 +153,8 @@ impl Packet {
 
 #[derive(Debug, Fail)]
 pub enum PacketError {
-    #[fail(display = "Invalid packet header: {}", reason)] InvalidHeader { reason: String },
-    #[fail(display = "Unsupported packet header: {}", reason)] UnsupportedHeader { reason: String },
+    #[fail(display = "Invalid packet header: {}", reason)]
+    InvalidHeader { reason: String },
+    #[fail(display = "Unsupported packet header: {}", reason)]
+    UnsupportedHeader { reason: String },
 }

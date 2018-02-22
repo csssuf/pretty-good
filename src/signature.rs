@@ -42,7 +42,7 @@ fn subpacket_length(inp: &[u8]) -> IResult<&[u8], u32> {
     };
 
     if first_octet < 192 {
-        return IResult::Done(remaining, u32::from(first_octet));
+        IResult::Done(remaining, u32::from(first_octet))
     } else if first_octet < 255 {
         let (remaining, second_octet) = match be_u8(remaining) {
             IResult::Done(remaining, second_octet) => (remaining, second_octet),
@@ -50,11 +50,11 @@ fn subpacket_length(inp: &[u8]) -> IResult<&[u8], u32> {
             IResult::Incomplete(i) => return IResult::Incomplete(i),
         };
 
-        let length = ((first_octet as u16 - 192) << 8) + second_octet as u16 + 192;
+        let length = ((u16::from(first_octet) - 192) << 8) + u16::from(second_octet) + 192;
 
-        return IResult::Done(remaining, u32::from(length));
+        IResult::Done(remaining, u32::from(length))
     } else {
-        return be_u32(remaining);
+        be_u32(remaining)
     }
 }
 
@@ -113,7 +113,7 @@ named!(subpackets<Vec<Subpacket>>, many0!(parse_subpacket));
 
 fn find_timestamp(subpackets: &[Subpacket]) -> Option<Duration> {
     for subpacket in subpackets {
-        if let &Subpacket::SignatureCreationTime(out) = subpacket {
+        if let Subpacket::SignatureCreationTime(out) = *subpacket {
             return Some(out);
         }
     }
@@ -123,7 +123,7 @@ fn find_timestamp(subpackets: &[Subpacket]) -> Option<Duration> {
 
 fn find_signer(subpackets: &[Subpacket]) -> Option<u64> {
     for subpacket in subpackets {
-        if let &Subpacket::Issuer(out) = subpacket {
+        if let Subpacket::Issuer(out) = *subpacket {
             return Some(out);
         }
     }
@@ -145,8 +145,8 @@ named!(
         signature: call!(rest) >>
         (SignaturePacket {
             sig_type: SignatureType::from(signature_type),
-            timestamp: find_timestamp(&hashed_subs).or(find_timestamp(&unhashed_subs)),
-            signer: find_signer(&hashed_subs).or(find_signer(&unhashed_subs)),
+            timestamp: find_timestamp(&hashed_subs).or_else(|| find_timestamp(&unhashed_subs)),
+            signer: find_signer(&hashed_subs).or_else(|| find_signer(&unhashed_subs)),
             pubkey_algo: PublicKeyAlgorithm::from(pubkey_algo),
             hash_algo: HashAlgorithm::from(hash_algo),
             hashed_subpackets: hashed_subs,
@@ -229,20 +229,20 @@ impl SignaturePacket {
 
     pub fn timestamp(&self) -> Option<Duration> {
         find_timestamp(&self.hashed_subpackets)
-            .or(find_timestamp(&self.unhashed_subpackets))
+            .or_else(|| find_timestamp(&self.unhashed_subpackets))
             .or(self.timestamp)
     }
 
     pub fn set_timestamp(&mut self, timestamp: Duration) {
         self.hashed_subpackets.retain(|subpacket| {
-            if let &Subpacket::SignatureCreationTime(_) = subpacket {
+            if let Subpacket::SignatureCreationTime(_) = *subpacket {
                 false
             } else {
                 true
             }
         });
         self.unhashed_subpackets.retain(|subpacket| {
-            if let &Subpacket::SignatureCreationTime(_) = subpacket {
+            if let Subpacket::SignatureCreationTime(_) = *subpacket {
                 false
             } else {
                 true
@@ -256,20 +256,20 @@ impl SignaturePacket {
 
     pub fn signer(&self) -> Option<u64> {
         find_signer(&self.hashed_subpackets)
-            .or(find_signer(&self.unhashed_subpackets))
+            .or_else(|| find_signer(&self.unhashed_subpackets))
             .or(self.signer)
     }
 
     pub fn set_signer(&mut self, signer: u64) {
         self.hashed_subpackets.retain(|subpacket| {
-            if let &Subpacket::Issuer(_) = subpacket {
+            if let Subpacket::Issuer(_) = *subpacket {
                 false
             } else {
                 true
             }
         });
         self.unhashed_subpackets.retain(|subpacket| {
-            if let &Subpacket::Issuer(_) = subpacket {
+            if let Subpacket::Issuer(_) = *subpacket {
                 false
             } else {
                 true
@@ -412,5 +412,8 @@ pub enum Signature {
 
 #[derive(Debug, Fail)]
 pub enum SignatureError {
-    #[fail(display = "Invalid signature format: {}", reason)] InvalidFormat { reason: String },
+    #[fail(display = "Invalid signature format: {}", reason)]
+    InvalidFormat { reason: String },
+    #[fail(display = "Unusable signature: {}", reason)]
+    Unusable { reason: String },
 }
