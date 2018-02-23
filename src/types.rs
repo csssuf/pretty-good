@@ -1,6 +1,7 @@
-use asn1::ObjectIdentifier;
+use simple_asn1::OID;
 use digest::Digest;
 use failure::Error;
+use num::BigUint;
 
 /// Type for public key algorithms supported by OpenPGP.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -101,20 +102,19 @@ macro_rules! hash {
 }
 
 impl HashAlgorithm {
-    pub fn asn1_oid(&self) -> Result<ObjectIdentifier, Error> {
-        let oid_vec = match *self {
-            HashAlgorithm::Md5 => vec![1, 2, 840, 113549, 2, 5],
-            HashAlgorithm::Sha1 => vec![1, 3, 14, 3, 2, 26],
-            HashAlgorithm::Ripemd160 => vec![1, 3, 36, 3, 2, 1],
-            HashAlgorithm::Sha256 => vec![2, 16, 840, 1, 101, 3, 4, 2, 1],
-            HashAlgorithm::Sha384 => vec![2, 16, 840, 1, 101, 3, 4, 2, 2],
-            HashAlgorithm::Sha512 => vec![2, 16, 840, 1, 101, 3, 4, 2, 3],
-            HashAlgorithm::Sha224 => vec![2, 16, 840, 1, 101, 3, 4, 2, 4],
+    pub fn asn1_oid(&self) -> Result<OID, Error> {
+        let oid = match *self {
+            HashAlgorithm::Md5 => oid![1, 2, 840, 113549, 2, 5],
+            HashAlgorithm::Sha1 => oid![1, 3, 14, 3, 2, 26],
+            HashAlgorithm::Ripemd160 => oid![1, 3, 36, 3, 2, 1],
+            HashAlgorithm::Sha256 => oid![2, 16, 840, 1, 101, 3, 4, 2, 1],
+            HashAlgorithm::Sha384 => oid![2, 16, 840, 1, 101, 3, 4, 2, 2],
+            HashAlgorithm::Sha512 => oid![2, 16, 840, 1, 101, 3, 4, 2, 3],
+            HashAlgorithm::Sha224 => oid![2, 16, 840, 1, 101, 3, 4, 2, 4],
             HashAlgorithm::Unknown => bail!(AlgorithmError::HashAlgorithmError),
         };
 
-        ObjectIdentifier::new(oid_vec)
-            .ok_or(AlgorithmError::HashAlgorithmError.into())
+        Ok(oid)
     }
 
     pub fn hash<T: AsRef<[u8]>>(&self, contents: T) -> Result<Vec<u8>, Error> {

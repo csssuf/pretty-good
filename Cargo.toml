@@ -10,19 +10,17 @@ categories = ["cryptography", "parser-implementations"]
 license = "Apache-2.0"
 
 [dependencies]
+simple_asn1 = "0.1"
 byteorder = "1.2"
 digest = "0.7"
 failure = "0.1"
 failure_derive = "0.1"
 gcrypt = "0.5"
 md-5 = "0.7"
+num = "0.1.40"
 ripemd160 = "0.7"
 sha-1 = "0.7"
 sha2 = "0.7"
-
-[dependencies.asn1]
-git = "https://github.com/csssuf/rust-asn1"
-branch = "null"
 
 [dependencies.nom]
 version = "^3.2"
