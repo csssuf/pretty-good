@@ -1,7 +1,13 @@
 [package]
 name = "pretty-good"
-version = "0.1.0"
+version = "0.0.0"
 authors = ["James Forcier <james.forcier@coreos.com>"]
+description = "RFC4880 (OpenPGP Message Format) library"
+repository = "https://github.com/csssuf/pretty-good"
+readme = "README.md"
+keywords = ["pgp", "openpgp", "gpg"]
+categories = ["cryptography", "parser-implementations"]
+license = "Apache-2.0"
 
 [dependencies]
 byteorder = "1.2"
