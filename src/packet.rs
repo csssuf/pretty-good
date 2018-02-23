@@ -1,3 +1,4 @@
+use byteorder::{BigEndian, WriteBytesExt};
 use failure::Error;
 use nom::{ErrorKind, be_u16, be_u32, be_u8};
 use nom::Err as NomErr;
@@ -106,6 +107,59 @@ pub enum Packet {
 }
 
 impl Packet {
+    fn packet_tag(&self) -> u8 {
+        match *self {
+            Packet::PublicKeySessionKey => 1,
+            Packet::Signature(_) => 2,
+            Packet::SymmetricKeySessionKey => 3,
+            Packet::OnePassSignature => 4,
+            Packet::SecretKey => 5,
+            Packet::PublicKey => 6,
+            Packet::SecretSubkey => 7,
+            Packet::CompressedData => 8,
+            Packet::SymmetricEncryptedData => 9,
+            Packet::Marker => 10,
+            Packet::LiteralData => 11,
+            Packet::Trust => 12,
+            Packet::UserId => 13,
+            Packet::PublicSubkey => 14,
+            Packet::UserAttribute => 17,
+            Packet::SymmetricEncryptedIntegrityProtectedData => 18,
+            Packet::ModificationDetectionCode => 19,
+        }
+    }
+
+    pub fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut out = Vec::new();
+
+        let body = match self {
+            &Packet::Signature(ref signature) => signature.to_bytes()?,
+            p => bail!(PacketError::UnimplementedType { packet_type: format!("{:?}", p) }),
+        };
+
+        let mut packet_tag = 0b1000_0000;
+        let packet_type = self.packet_tag() << 2;
+        packet_tag |= packet_type;
+
+        if body.len() < ::std::u8::MAX as usize {
+            // Header is 2 octets long. packet_tag is unchanged.
+            out.push(packet_tag);
+            out.push(body.len() as u8);
+        } else if body.len() < ::std::u16::MAX as usize {
+            // Header is 3 octets long.
+            out.push(packet_tag | 0x1);
+            out.write_u16::<BigEndian>(body.len() as u16)?;
+        } else {
+            // Header is 5 octets long.
+            out.push(packet_tag | 0x2);
+            out.write_u32::<BigEndian>(body.len() as u32)?;
+        }
+
+        out.extend(&body);
+
+        Ok(out)
+    }
+
     pub fn from_bytes(bytes: &[u8]) -> Result<Packet, Error> {
         let (packet_tag, packet_data) = match pgp_packet_header(bytes) {
             Done(_, (tag, data)) => (tag, data),
@@ -160,4 +214,6 @@ pub enum PacketError {
     InvalidHeader { reason: String },
     #[fail(display = "Unsupported packet header: {}", reason)]
     UnsupportedHeader { reason: String },
+    #[fail(display = "Unimplemented packet type: {}", packet_type)]
+    UnimplementedType { packet_type: String },
 }
