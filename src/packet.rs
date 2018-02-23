@@ -2,7 +2,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 use failure::Error;
 use nom::{ErrorKind, be_u16, be_u32, be_u8};
 use nom::Err as NomErr;
-use nom::IResult::{self, *};
+use nom::IResult;
 
 use signature::*;
 use types::NomError;
@@ -23,48 +23,48 @@ named!(old_tag_format<(&[u8], usize), (u8, &[u8])>,
 
 fn new_tag_format(inp: (&[u8], usize)) -> IResult<(&[u8], usize), (u8, &[u8])> {
     let (remaining, tag) = match take_bits!(inp, u8, 6) {
-        Done(remaining, tag) => (remaining, tag),
-        Error(e) => return Error(e),
-        Incomplete(i) => return Incomplete(i),
+        IResult::Done(remaining, tag) => (remaining, tag),
+        IResult::Error(e) => return IResult::Error(e),
+        IResult::Incomplete(i) => return IResult::Incomplete(i),
     };
 
     let (remaining, first_octet) = match bytes!(remaining, be_u8) {
-        Done(remaining, first_octet) => (remaining, first_octet),
-        Error(e) => return Error(e),
-        Incomplete(i) => return Incomplete(i),
+        IResult::Done(remaining, first_octet) => (remaining, first_octet),
+        IResult::Error(e) => return IResult::Error(e),
+        IResult::Incomplete(i) => return IResult::Incomplete(i),
     };
 
     if first_octet < 192 {
         match bytes!(remaining, take!(first_octet)) {
-            Done(remaining, contents) => return Done(remaining, (tag, contents)),
-            Error(e) => return Error(e),
-            Incomplete(i) => return Incomplete(i),
+            IResult::Done(remaining, contents) => return IResult::Done(remaining, (tag, contents)),
+            IResult::Error(e) => return IResult::Error(e),
+            IResult::Incomplete(i) => return IResult::Incomplete(i),
         }
     } else if first_octet < 224 {
         let (remaining, second_octet) = match bytes!(remaining, be_u8) {
-            Done(remaining, second_octet) => (remaining, second_octet),
-            Error(e) => return Error(e),
-            Incomplete(i) => return Incomplete(i),
+            IResult::Done(remaining, second_octet) => (remaining, second_octet),
+            IResult::Error(e) => return IResult::Error(e),
+            IResult::Incomplete(i) => return IResult::Incomplete(i),
         };
 
         let length = ((first_octet as u16 - 192) << 8) + second_octet as u16 + 192;
 
         match bytes!(remaining, take!(length)) {
-            Done(remaining, contents) => return Done(remaining, (tag, contents)),
-            Error(e) => return Error(e),
-            Incomplete(i) => return Incomplete(i),
+            IResult::Done(remaining, contents) => return IResult::Done(remaining, (tag, contents)),
+            IResult::Error(e) => return IResult::Error(e),
+            IResult::Incomplete(i) => return IResult::Incomplete(i),
         }
     } else if first_octet == 255 {
         let (remaining, length) = match bytes!(remaining, be_u32) {
-            Done(remaining, length) => (remaining, length),
-            Error(e) => return Error(e),
-            Incomplete(i) => return Incomplete(i),
+            IResult::Done(remaining, length) => (remaining, length),
+            IResult::Error(e) => return IResult::Error(e),
+            IResult::Incomplete(i) => return IResult::Incomplete(i),
         };
 
         match bytes!(remaining, take!(length)) {
-            Done(remaining, contents) => return Done(remaining, (tag, contents)),
-            Error(e) => return Error(e),
-            Incomplete(i) => return Incomplete(i),
+            IResult::Done(remaining, contents) => return IResult::Done(remaining, (tag, contents)),
+            IResult::Error(e) => return IResult::Error(e),
+            IResult::Incomplete(i) => return IResult::Incomplete(i),
         }
     }
 
@@ -166,18 +166,18 @@ impl Packet {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Packet, Error> {
         let (packet_tag, packet_data) = match pgp_packet_header(bytes) {
-            Done(_, (tag, data)) => (tag, data),
-            Error(NomErr::Code(ErrorKind::Custom(e))) => {
+            IResult::Done(_, (tag, data)) => (tag, data),
+            IResult::Error(NomErr::Code(ErrorKind::Custom(e))) => {
                 let e = NomError::from(e);
 
                 bail!(PacketError::UnsupportedHeader {
                     reason: format!("{:?}", e),
                 })
             }
-            Error(e) => bail!(PacketError::InvalidHeader {
+            IResult::Error(e) => bail!(PacketError::InvalidHeader {
                 reason: format!("{}", e),
             }),
-            Incomplete(i) => bail!(PacketError::InvalidHeader {
+            IResult::Incomplete(i) => bail!(PacketError::InvalidHeader {
                 reason: format!("{:?}", i),
             }),
         };
