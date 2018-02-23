@@ -176,6 +176,7 @@ named!(
 
 named!(signature<SignaturePacket>, alt!(v3_sig | v4_sig));
 
+/// The contents of a PGP signature packet.
 #[derive(Clone, Debug)]
 pub struct SignaturePacket {
     pub sig_type: SignatureType,
@@ -436,6 +437,9 @@ impl SignaturePacket {
     }
 }
 
+/// The type of content a signature covers. See [RFC4880 &sect;5.2.1].
+///
+/// [RFC4880 &sect;5.2.1]: https://tools.ietf.org/html/rfc4880#section-5.2.1
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum SignatureType {
@@ -503,6 +507,10 @@ impl From<SignatureType> for u8 {
     }
 }
 
+/// Type for [`SignaturePacket`] subpackets. See [RFC4880 &sect;5.2.3.1].
+///
+/// [`SignaturePacket`]: struct.SignaturePacket.html
+/// [RFC4880 &sect;5.2.3.1]: https://tools.ietf.org/html/rfc4880#section-5.2.3.1
 #[derive(Clone, Debug)]
 pub enum Subpacket {
     SignatureCreationTime(Duration),
@@ -562,6 +570,10 @@ impl Subpacket {
     }
 }
 
+/// Actual multiprecision integer signature contents.
+///
+/// For RSA signatures, this is the multiprecision integer representing `m^d mod n`. For DSA
+/// signatures, this is two multiprecision integers representing `r` and `s`, respectively.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Signature {
     Rsa(Integer),
@@ -569,6 +581,9 @@ pub enum Signature {
     Unknown(Vec<u8>),
 }
 
+/// Error type for [`SignaturePacket`]-level errors.
+///
+/// [`SignaturePacket`]: struct.SignaturePacket.html
 #[derive(Debug, Fail)]
 pub enum SignatureError {
     #[fail(display = "Invalid signature format: {}", reason)]

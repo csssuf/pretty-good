@@ -85,6 +85,10 @@ named!(
     ))
 );
 
+/// An OpenPGP packet.
+///
+/// Each currently-implemented variant contains a single structure representing the contents of
+/// that packet type.
 #[derive(Clone, Debug)]
 pub enum Packet {
     PublicKeySessionKey,
@@ -208,6 +212,9 @@ impl Packet {
     }
 }
 
+/// Error type for [`Packet`]-level errors.
+///
+/// [`Packet`]: enum.Packet.html
 #[derive(Debug, Fail)]
 pub enum PacketError {
     #[fail(display = "Invalid packet header: {}", reason)]

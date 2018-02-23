@@ -2,6 +2,7 @@ use asn1::ObjectIdentifier;
 use digest::Digest;
 use failure::Error;
 
+/// Type for public key algorithms supported by OpenPGP.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum PublicKeyAlgorithm {
@@ -51,6 +52,7 @@ impl From<PublicKeyAlgorithm> for u8 {
     }
 }
 
+/// Type for hash algorithms supported by OpenPGP.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum HashAlgorithm {
@@ -152,6 +154,10 @@ impl From<u32> for NomError {
     }
 }
 
+/// Error type for [`PublicKeyAlgorithm`] and [`HashAlgorithm`]-related operations.
+///
+/// [`PublicKeyAlgorithm`]: enum.PublicKeyAlgorithm.html
+/// [`HashAlgorithm`]: enum.HashAlgorithm.html
 #[derive(Clone, Debug, Fail)]
 pub enum AlgorithmError {
     #[fail(display = "unknown public key algorithm")]
