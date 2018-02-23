@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
@@ -31,6 +32,7 @@ named!(
             hashed_subpackets: Vec::new(),
             unhashed_subpackets: Vec::new(),
             signature_contents: Vec::from(signature),
+            payload_hash: RefCell::new(None),
         })
     )
 );
@@ -167,6 +169,7 @@ named!(
             hashed_subpackets: hashed_subs,
             unhashed_subpackets: unhashed_subs,
             signature_contents: Vec::from(signature),
+            payload_hash: RefCell::new(None),
         })
     )
 );
@@ -183,6 +186,7 @@ pub struct SignaturePacket {
     pub hashed_subpackets: Vec<Subpacket>,
     pub unhashed_subpackets: Vec<Subpacket>,
     signature_contents: Vec<u8>,
+    payload_hash: RefCell<Option<Vec<u8>>>,
 }
 
 impl SignaturePacket {
@@ -204,6 +208,7 @@ impl SignaturePacket {
             hashed_subpackets: Vec::new(),
             unhashed_subpackets: Vec::new(),
             signature_contents: Vec::new(),
+            payload_hash: RefCell::new(None),
         })
     }
 
@@ -345,9 +350,10 @@ impl SignaturePacket {
         Ok(header)
     }
 
-    /// Build a payload suitable for signing. Note that this payload must still be hashed with
-    /// `hash_algo` and placed in an ASN.1 DigestInfo structure prior to signing, which is outside
-    /// the scope of this library.
+    /// Build a payload suitable for signing.
+    ///
+    /// Note that this payload must be placed in an ASN.1 DigestInfo structure prior to signing,
+    /// which is outside the scope of this library.
     pub fn signable_payload<T: AsRef<[u8]>>(&self, payload: T) -> Result<Vec<u8>, Error> {
         let mut signing_payload = Vec::from(payload.as_ref());
 
@@ -366,7 +372,10 @@ impl SignaturePacket {
         suffix.write_u32::<BigEndian>(common_header.len() as u32)?;
         signing_payload.extend(&suffix);
 
-        Ok(signing_payload)
+        let hash = self.hash_algo.hash(signing_payload)?;
+        self.payload_hash.replace(Some(hash.clone()));
+
+        Ok(hash)
     }
 
     /// Retrieve the header for this signature, i.e. everything except the MPI contents of the
@@ -383,6 +392,17 @@ impl SignaturePacket {
         // total length of all unhashed subpackets.
         header.write_u16::<BigEndian>(unhashed_subpackets_bytes.len() as u16)?;
         header.extend(&unhashed_subpackets_bytes);
+
+        match *self.payload_hash.borrow() {
+            Some(ref hash) => {
+                header.push(hash[0]);
+                header.push(hash[1]);
+            }
+            None => {
+                header.push(0);
+                header.push(0);
+            }
+        }
 
         Ok(header)
     }
