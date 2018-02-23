@@ -1,4 +1,5 @@
 use asn1::ObjectIdentifier;
+use digest::Digest;
 use failure::Error;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -93,6 +94,10 @@ impl From<HashAlgorithm> for u8 {
     }
 }
 
+macro_rules! hash {
+    ($res:expr) => (Vec::from($res.as_ref()))
+}
+
 impl HashAlgorithm {
     pub fn asn1_oid(&self) -> Result<ObjectIdentifier, Error> {
         let oid_vec = match *self {
@@ -108,6 +113,22 @@ impl HashAlgorithm {
 
         ObjectIdentifier::new(oid_vec)
             .ok_or(AlgorithmError::HashAlgorithmError.into())
+    }
+
+    pub fn hash<T: AsRef<[u8]>>(&self, contents: T) -> Result<Vec<u8>, Error> {
+        let contents = contents.as_ref();
+        let hash_result = match *self {
+            HashAlgorithm::Md5 => hash!(::md5::Md5::digest(contents)),
+            HashAlgorithm::Sha1 => hash!(::sha1::Sha1::digest(contents)),
+            HashAlgorithm::Ripemd160 => hash!(::ripemd160::Ripemd160::digest(contents)),
+            HashAlgorithm::Sha256 => hash!(::sha2::Sha256::digest(contents)),
+            HashAlgorithm::Sha384 => hash!(::sha2::Sha384::digest(contents)),
+            HashAlgorithm::Sha512 => hash!(::sha2::Sha512::digest(contents)),
+            HashAlgorithm::Sha224 => hash!(::sha2::Sha224::digest(contents)),
+            HashAlgorithm::Unknown => bail!(AlgorithmError::HashAlgorithmError),
+        };
+
+        Ok(hash_result)
     }
 }
 

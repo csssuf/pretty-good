@@ -5,9 +5,14 @@ authors = ["James Forcier <james.forcier@coreos.com>"]
 
 [dependencies]
 byteorder = "1.2"
+digest = "0.7"
 failure = "0.1"
 failure_derive = "0.1"
 gcrypt = "0.5"
+md-5 = "0.7"
+ripemd160 = "0.7"
+sha-1 = "0.7"
+sha2 = "0.7"
 
 [dependencies.asn1]
 git = "https://github.com/csssuf/rust-asn1"
