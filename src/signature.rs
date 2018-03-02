@@ -223,11 +223,14 @@ impl SignaturePacket {
             | PublicKeyAlgorithm::RsaSignOnly => {
                 let (mut header_slice, mpi_slice) = self.signature_contents.split_at(2);
                 let header = header_slice.read_u16::<BigEndian>()?;
+                // GPG uses the header to indicate the number of bits in the MPI; we care about the
+                // number of bytes.
+                let header = (header as f64 / 8.0).ceil() as usize;
 
-                if mpi_slice.len() < header as usize {
+                if mpi_slice.len() < header {
                     bail!(SignatureError::MalformedMpi);
                 }
-                let (mpi_slice, _) = mpi_slice.split_at(header as usize);
+                let (mpi_slice, _) = mpi_slice.split_at(header);
 
                 let mpi = BigUint::from_bytes_be(mpi_slice);
                 Ok(Signature::Rsa(mpi))
@@ -235,17 +238,21 @@ impl SignaturePacket {
             PublicKeyAlgorithm::Dsa => {
                 let (mut header_r_slice, remaining) = self.signature_contents.split_at(2);
                 let header_r = header_r_slice.read_u16::<BigEndian>()?;
+                // GPG uses the header to indicate the number of bits in the MPI; we care about the
+                // number of bytes.
+                let header_r = (header_r as f64 / 8.0).ceil() as usize;
 
-                if remaining.len() < header_r as usize {
+                if remaining.len() < header_r {
                     bail!(SignatureError::MalformedMpi);
                 }
 
-                let (mpi_r_slice, remaining) = remaining.split_at(header_r as usize);
+                let (mpi_r_slice, remaining) = remaining.split_at(header_r);
 
                 let (mut header_s_slice, mpi_s_slice) = remaining.split_at(2);
                 let header_s = header_s_slice.read_u16::<BigEndian>()?;
+                let header_s = (header_s as f64 / 8.0).ceil() as usize;
 
-                if mpi_s_slice.len() < header_s as usize {
+                if mpi_s_slice.len() < header_s {
                     bail!(SignatureError::MalformedMpi);
                 }
 
@@ -264,22 +271,19 @@ impl SignaturePacket {
             Signature::Rsa(mpi) => {
                 let mut mpi_header = Vec::new();
 
-                let mpi_bytes = mpi.to_bytes_be();
-                mpi_header.write_u16::<BigEndian>(mpi_bytes.len() as u16)?;
-                mpi_header.extend(&mpi_bytes);
+                mpi_header.write_u16::<BigEndian>(mpi.bits() as u16)?;
+                mpi_header.extend(&mpi.to_bytes_be());
 
                 self.signature_contents = mpi_header;
             }
             Signature::Dsa(r, s) => {
                 let mut mpis = Vec::new();
 
-                let r_vec = r.to_bytes_be();
-                mpis.write_u16::<BigEndian>(r_vec.len() as u16)?;
-                mpis.extend(&r_vec);
+                mpis.write_u16::<BigEndian>(r.bits() as u16)?;
+                mpis.extend(&r.to_bytes_be());
 
-                let s_vec = s.to_bytes_be();
-                mpis.write_u16::<BigEndian>(s_vec.len() as u16)?;
-                mpis.extend(&s_vec);
+                mpis.write_u16::<BigEndian>(s.bits() as u16)?;
+                mpis.extend(&s.to_bytes_be());
 
                 self.signature_contents = mpis;
             }
