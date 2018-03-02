@@ -3,10 +3,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use failure::Error;
-use gcrypt::mpi::integer::{Format, Integer};
 use nom::{rest, be_u16, be_u32, be_u64, be_u8};
 use nom::{ErrorKind, IResult};
 use nom::Err as NomErr;
+use num::BigUint;
 
 use types::*;
 
@@ -221,13 +221,36 @@ impl SignaturePacket {
             PublicKeyAlgorithm::Rsa
             | PublicKeyAlgorithm::RsaEncryptOnly
             | PublicKeyAlgorithm::RsaSignOnly => {
-                let mpi = Integer::from_bytes(Format::Pgp, &self.signature_contents)?;
+                let (mut header_slice, mpi_slice) = self.signature_contents.split_at(2);
+                let header = header_slice.read_u16::<BigEndian>()?;
+
+                if mpi_slice.len() < header as usize {
+                    bail!(SignatureError::MalformedMpi);
+                }
+                let (mpi_slice, _) = mpi_slice.split_at(header as usize);
+
+                let mpi = BigUint::from_bytes_be(mpi_slice);
                 Ok(Signature::Rsa(mpi))
             }
             PublicKeyAlgorithm::Dsa => {
-                let mpi_r = Integer::from_bytes(Format::Pgp, &self.signature_contents)?;
-                let s_pos = mpi_r.len_encoded(Format::Pgp)?;
-                let mpi_s = Integer::from_bytes(Format::Pgp, &self.signature_contents[s_pos..])?;
+                let (mut header_r_slice, remaining) = self.signature_contents.split_at(2);
+                let header_r = header_r_slice.read_u16::<BigEndian>()?;
+
+                if remaining.len() < header_r as usize {
+                    bail!(SignatureError::MalformedMpi);
+                }
+
+                let (mpi_r_slice, remaining) = remaining.split_at(header_r as usize);
+
+                let (mut header_s_slice, mpi_s_slice) = remaining.split_at(2);
+                let header_s = header_s_slice.read_u16::<BigEndian>()?;
+
+                if mpi_s_slice.len() < header_s as usize {
+                    bail!(SignatureError::MalformedMpi);
+                }
+
+                let mpi_r = BigUint::from_bytes_be(mpi_r_slice);
+                let mpi_s = BigUint::from_bytes_be(mpi_s_slice);
 
                 Ok(Signature::Dsa(mpi_r, mpi_s))
             }
@@ -239,14 +262,26 @@ impl SignaturePacket {
     pub fn set_contents(&mut self, sig: Signature) -> Result<(), Error> {
         match sig {
             Signature::Rsa(mpi) => {
-                self.signature_contents = Vec::from(mpi.to_bytes(Format::Pgp)?.as_bytes())
+                let mut mpi_header = Vec::new();
+
+                let mpi_bytes = mpi.to_bytes_be();
+                mpi_header.write_u16::<BigEndian>(mpi_bytes.len() as u16)?;
+                mpi_header.extend(&mpi_bytes);
+
+                self.signature_contents = mpi_header;
             }
             Signature::Dsa(r, s) => {
-                let mut r_vec = Vec::from(r.to_bytes(Format::Pgp)?.as_bytes());
-                let s_vec = Vec::from(s.to_bytes(Format::Pgp)?.as_bytes());
-                r_vec.extend(&s_vec);
+                let mut mpis = Vec::new();
 
-                self.signature_contents = r_vec;
+                let r_vec = r.to_bytes_be();
+                mpis.write_u16::<BigEndian>(r_vec.len() as u16)?;
+                mpis.extend(&r_vec);
+
+                let s_vec = s.to_bytes_be();
+                mpis.write_u16::<BigEndian>(s_vec.len() as u16)?;
+                mpis.extend(&s_vec);
+
+                self.signature_contents = mpis;
             }
             Signature::Unknown(payload) => self.signature_contents = payload.clone(),
         }
@@ -576,8 +611,8 @@ impl Subpacket {
 /// signatures, this is two multiprecision integers representing `r` and `s`, respectively.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Signature {
-    Rsa(Integer),
-    Dsa(Integer, Integer),
+    Rsa(BigUint),
+    Dsa(BigUint, BigUint),
     Unknown(Vec<u8>),
 }
 
@@ -590,4 +625,6 @@ pub enum SignatureError {
     InvalidFormat { reason: String },
     #[fail(display = "Unusable signature: {}", reason)]
     Unusable { reason: String },
+    #[fail(display = "Malformed MPI payload")]
+    MalformedMpi,
 }

@@ -25,7 +25,6 @@ extern crate digest;
 extern crate failure;
 #[macro_use]
 extern crate failure_derive;
-extern crate gcrypt;
 extern crate md5;
 #[macro_use]
 extern crate nom;
