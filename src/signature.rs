@@ -91,20 +91,20 @@ fn parse_subpacket(inp: &[u8]) -> IResult<&[u8], Subpacket> {
         IResult::Incomplete(i) => return IResult::Incomplete(i),
     };
 
-    match subpacket_type {
-        0 | 1 | 8 | 13 | 14 | 15 | 17 | 18 | 19 => IResult::Error(NomErr::Code(
-            ErrorKind::Custom(NomError::UseOfReservedValue as u32),
-        )),
-        2 => parse_time_subpacket(packet_contents)
+    match SubpacketType::from(subpacket_type) {
+        SubpacketType::Reserved => IResult::Error(NomErr::Code(ErrorKind::Custom(
+            NomError::UseOfReservedValue as u32,
+        ))),
+        SubpacketType::SignatureCreationTime => parse_time_subpacket(packet_contents)
             .map(|time| IResult::Done(remaining, Subpacket::SignatureCreationTime(time)))
             .unwrap_or_else(IResult::Error),
-        3 => parse_time_subpacket(packet_contents)
+        SubpacketType::SignatureExpirationTime => parse_time_subpacket(packet_contents)
             .map(|time| IResult::Done(remaining, Subpacket::SignatureExpirationTime(time)))
             .unwrap_or_else(IResult::Error),
-        16 => parse_keyid_subpacket(packet_contents)
+        SubpacketType::Issuer => parse_keyid_subpacket(packet_contents)
             .map(|key_id| IResult::Done(remaining, Subpacket::Issuer(key_id)))
             .unwrap_or_else(IResult::Error),
-        t => IResult::Done(remaining, Subpacket::Unknown(t, length)),
+        _ => IResult::Done(remaining, Subpacket::Unknown(subpacket_type, length)),
     }
 }
 
@@ -615,4 +615,65 @@ pub enum SignatureError {
     Unusable { reason: String },
     #[fail(display = "Malformed MPI payload")]
     MalformedMpi,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SubpacketType {
+    SignatureCreationTime,
+    SignatureExpirationTime,
+    ExportableCertification,
+    TrustSignature,
+    RegularExpression,
+    Revocable,
+    KeyExpirationTime,
+    PreferredSymmetricAlgorithms,
+    RevocationKey,
+    Issuer,
+    NotationData,
+    PreferredHashAlgorithms,
+    PreferredCompressionAlgorithms,
+    KeyServerPreferences,
+    PreferredKeyServer,
+    PrimaryUserId,
+    PolicyUri,
+    KeyFlags,
+    SignerUserId,
+    RevocationReason,
+    Features,
+    SignatureTarget,
+    EmbeddedSignature,
+    Reserved,
+    Unknown,
+}
+
+impl From<u8> for SubpacketType {
+    fn from(t: u8) -> SubpacketType {
+        match t {
+            0 | 1 | 8 | 13 | 14 | 15 | 17 | 18 | 19 => SubpacketType::Reserved,
+            2 => SubpacketType::SignatureCreationTime,
+            3 => SubpacketType::SignatureExpirationTime,
+            4 => SubpacketType::ExportableCertification,
+            5 => SubpacketType::TrustSignature,
+            6 => SubpacketType::RegularExpression,
+            7 => SubpacketType::Revocable,
+            9 => SubpacketType::KeyExpirationTime,
+            11 => SubpacketType::PreferredSymmetricAlgorithms,
+            12 => SubpacketType::RevocationKey,
+            16 => SubpacketType::Issuer,
+            20 => SubpacketType::NotationData,
+            21 => SubpacketType::PreferredHashAlgorithms,
+            22 => SubpacketType::PreferredCompressionAlgorithms,
+            23 => SubpacketType::KeyServerPreferences,
+            24 => SubpacketType::PreferredKeyServer,
+            25 => SubpacketType::PrimaryUserId,
+            26 => SubpacketType::PolicyUri,
+            27 => SubpacketType::KeyFlags,
+            28 => SubpacketType::SignerUserId,
+            29 => SubpacketType::RevocationReason,
+            30 => SubpacketType::Features,
+            31 => SubpacketType::SignatureTarget,
+            32 => SubpacketType::EmbeddedSignature,
+            _ => SubpacketType::Unknown,
+        }
+    }
 }
