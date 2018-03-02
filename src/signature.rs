@@ -61,6 +61,17 @@ fn subpacket_length(inp: &[u8]) -> IResult<&[u8], u32> {
     }
 }
 
+fn parse_time_subpacket<T>(mut inp: &[u8]) -> Result<Duration, NomErr<T>> {
+    inp.read_u32::<BigEndian>()
+        .map(|seconds| Duration::from_secs(u64::from(seconds)))
+        .map_err(|_| NomErr::Code(ErrorKind::Custom(NomError::IntegerReadError as u32)))
+}
+
+fn parse_keyid_subpacket<T>(mut inp: &[u8]) -> Result<u64, NomErr<T>> {
+    inp.read_u64::<BigEndian>()
+        .map_err(|_| NomErr::Code(ErrorKind::Custom(NomError::IntegerReadError as u32)))
+}
+
 fn parse_subpacket(inp: &[u8]) -> IResult<&[u8], Subpacket> {
     let (remaining, length) = match subpacket_length(inp) {
         IResult::Done(remaining, length) => (remaining, length),
@@ -74,7 +85,7 @@ fn parse_subpacket(inp: &[u8]) -> IResult<&[u8], Subpacket> {
         IResult::Incomplete(i) => return IResult::Incomplete(i),
     };
 
-    let (remaining, mut packet_contents) = match take!(remaining, length - 1) {
+    let (remaining, packet_contents) = match take!(remaining, length - 1) {
         IResult::Done(remaining, contents) => (remaining, contents),
         IResult::Error(e) => return IResult::Error(e),
         IResult::Incomplete(i) => return IResult::Incomplete(i),
@@ -84,44 +95,15 @@ fn parse_subpacket(inp: &[u8]) -> IResult<&[u8], Subpacket> {
         0 | 1 | 8 | 13 | 14 | 15 | 17 | 18 | 19 => IResult::Error(NomErr::Code(
             ErrorKind::Custom(NomError::UseOfReservedValue as u32),
         )),
-        2 => {
-            let time_secs = match packet_contents.read_u32::<BigEndian>() {
-                Ok(val) => val,
-                Err(_) => {
-                    return IResult::Error(NomErr::Code(ErrorKind::Custom(
-                        NomError::IntegerReadError as u32,
-                    )))
-                }
-            };
-            let subpacket =
-                Subpacket::SignatureCreationTime(Duration::from_secs(u64::from(time_secs)));
-            IResult::Done(remaining, subpacket)
-        }
-        3 => {
-            let time_secs = match packet_contents.read_u32::<BigEndian>() {
-                Ok(val) => val,
-                Err(_) => {
-                    return IResult::Error(NomErr::Code(ErrorKind::Custom(
-                        NomError::IntegerReadError as u32,
-                    )))
-                }
-            };
-            let subpacket =
-                Subpacket::SignatureExpirationTime(Duration::from_secs(u64::from(time_secs)));
-            IResult::Done(remaining, subpacket)
-        }
-        16 => {
-            let issuer = match packet_contents.read_u64::<BigEndian>() {
-                Ok(val) => val,
-                Err(_) => {
-                    return IResult::Error(NomErr::Code(ErrorKind::Custom(
-                        NomError::IntegerReadError as u32,
-                    )))
-                }
-            };
-            let subpacket = Subpacket::Issuer(issuer);
-            IResult::Done(remaining, subpacket)
-        }
+        2 => parse_time_subpacket(packet_contents)
+            .map(|time| IResult::Done(remaining, Subpacket::SignatureCreationTime(time)))
+            .unwrap_or_else(IResult::Error),
+        3 => parse_time_subpacket(packet_contents)
+            .map(|time| IResult::Done(remaining, Subpacket::SignatureExpirationTime(time)))
+            .unwrap_or_else(IResult::Error),
+        16 => parse_keyid_subpacket(packet_contents)
+            .map(|key_id| IResult::Done(remaining, Subpacket::Issuer(key_id)))
+            .unwrap_or_else(IResult::Error),
         t => IResult::Done(remaining, Subpacket::Unknown(t, length)),
     }
 }
