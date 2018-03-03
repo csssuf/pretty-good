@@ -72,6 +72,12 @@ fn parse_keyid_subpacket<T>(mut inp: &[u8]) -> Result<u64, NomErr<T>> {
         .map_err(|_| NomErr::Code(ErrorKind::Custom(NomError::IntegerReadError as u32)))
 }
 
+fn parse_hash_algorithms(inp: &[u8]) -> Vec<HashAlgorithm> {
+    inp.into_iter()
+        .map(|val| HashAlgorithm::from(*val))
+        .collect::<Vec<_>>()
+}
+
 fn parse_subpacket(inp: &[u8]) -> IResult<&[u8], Subpacket> {
     let (remaining, length) = match subpacket_length(inp) {
         IResult::Done(remaining, length) => (remaining, length),
@@ -104,6 +110,10 @@ fn parse_subpacket(inp: &[u8]) -> IResult<&[u8], Subpacket> {
         SubpacketType::Issuer => parse_keyid_subpacket(packet_contents)
             .map(|key_id| IResult::Done(remaining, Subpacket::Issuer(key_id)))
             .unwrap_or_else(IResult::Error),
+        SubpacketType::PreferredHashAlgorithms => IResult::Done(
+            remaining,
+            Subpacket::PreferredHashAlgorithms(parse_hash_algorithms(packet_contents)),
+        ),
         _ => IResult::Done(remaining, Subpacket::Unknown(subpacket_type, length)),
     }
 }
@@ -332,6 +342,49 @@ impl SignaturePacket {
         self.signer = Some(signer);
     }
 
+    /// Retrieve the preferred hash algorithms of this signature.
+    pub fn preferred_hash_algorithms(&self) -> Option<Vec<HashAlgorithm>> {
+        for subpacket in &self.hashed_subpackets {
+            if let Subpacket::PreferredHashAlgorithms(ref algos) = *subpacket {
+                return Some(algos.clone());
+            }
+        }
+
+        for subpacket in &self.unhashed_subpackets {
+            if let Subpacket::PreferredHashAlgorithms(ref algos) = *subpacket {
+                return Some(algos.clone());
+            }
+        }
+
+        None
+    }
+
+    /// Set the preferred hash algorithms of this signature. If `hashed` is true, this subpacket
+    /// will be added as a hashed subpacket.
+    pub fn set_preferred_hash_algorithms<T: AsRef<[HashAlgorithm]>>(&mut self, algos: T, hashed: bool) {
+        self.hashed_subpackets.retain(|subpacket| {
+            if let Subpacket::PreferredHashAlgorithms(_) = *subpacket {
+                false
+            } else {
+                true
+            }
+        });
+        self.unhashed_subpackets.retain(|subpacket| {
+            if let Subpacket::PreferredHashAlgorithms(_) = *subpacket {
+                false
+            } else {
+                true
+            }
+        });
+
+        let algos = Subpacket::PreferredHashAlgorithms(Vec::from(algos.as_ref()));
+        if hashed {
+            self.hashed_subpackets.push(algos);
+        } else {
+            self.unhashed_subpackets.push(algos);
+        }
+    }
+
     fn common_header(&self) -> Result<Vec<u8>, Error> {
         let mut header = Vec::new();
 
@@ -547,7 +600,7 @@ pub enum Subpacket {
     RevocationKey,
     Issuer(u64),
     NotationData,
-    PreferredHashAlgorithms,
+    PreferredHashAlgorithms(Vec<HashAlgorithm>),
     PreferredCompressionAlgorithms,
     KeyServerPreferences,
     PreferredKeyServer,
