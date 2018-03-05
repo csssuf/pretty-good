@@ -35,6 +35,7 @@ extern crate sha2;
 extern crate yasna;
 
 mod compression;
+mod key;
 mod literal;
 mod marker;
 mod packet;
@@ -45,6 +46,7 @@ mod userid;
 mod util;
 
 pub use compression::*;
+pub use key::*;
 pub use literal::*;
 pub use packet::*;
 pub use s2k::*;
