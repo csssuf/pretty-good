@@ -78,6 +78,10 @@ fn parse_hash_algorithms(inp: &[u8]) -> Vec<HashAlgorithm> {
         .collect::<Vec<_>>()
 }
 
+fn parse_bool(inp: &[u8]) -> bool {
+    inp[0] != 0
+}
+
 fn parse_subpacket(inp: &[u8]) -> IResult<&[u8], Subpacket> {
     let (remaining, length) = match subpacket_length(inp) {
         IResult::Done(remaining, length) => (remaining, length),
@@ -107,12 +111,27 @@ fn parse_subpacket(inp: &[u8]) -> IResult<&[u8], Subpacket> {
         SubpacketType::SignatureExpirationTime => parse_time_subpacket(packet_contents)
             .map(|time| IResult::Done(remaining, Subpacket::SignatureExpirationTime(time)))
             .unwrap_or_else(IResult::Error),
+        SubpacketType::ExportableCertification => IResult::Done(
+            remaining,
+            Subpacket::ExportableCertification(parse_bool(packet_contents))
+        ),
+        SubpacketType::Revocable => IResult::Done(
+            remaining,
+            Subpacket::Revocable(parse_bool(packet_contents))
+        ),
+        SubpacketType::KeyExpirationTime => parse_time_subpacket(packet_contents)
+            .map(|time| IResult::Done(remaining, Subpacket::KeyExpirationTime(time)))
+            .unwrap_or_else(IResult::Error),
         SubpacketType::Issuer => parse_keyid_subpacket(packet_contents)
             .map(|key_id| IResult::Done(remaining, Subpacket::Issuer(key_id)))
             .unwrap_or_else(IResult::Error),
         SubpacketType::PreferredHashAlgorithms => IResult::Done(
             remaining,
             Subpacket::PreferredHashAlgorithms(parse_hash_algorithms(packet_contents)),
+        ),
+        SubpacketType::PrimaryUserId => IResult::Done(
+            remaining,
+            Subpacket::PrimaryUserId(parse_bool(packet_contents)),
         ),
         _ => IResult::Done(remaining, Subpacket::Unknown(subpacket_type, length)),
     }
@@ -591,10 +610,10 @@ impl From<SignatureType> for u8 {
 pub enum Subpacket {
     SignatureCreationTime(Duration),
     SignatureExpirationTime(Duration),
-    ExportableCertification,
+    ExportableCertification(bool),
     TrustSignature,
     RegularExpression,
-    Revocable,
+    Revocable(bool),
     KeyExpirationTime(Duration),
     PreferredSymmetricAlgorithms,
     RevocationKey,
@@ -604,7 +623,7 @@ pub enum Subpacket {
     PreferredCompressionAlgorithms,
     KeyServerPreferences,
     PreferredKeyServer,
-    PrimaryUserId,
+    PrimaryUserId(bool),
     PolicyUri,
     KeyFlags,
     SignerUserId,
