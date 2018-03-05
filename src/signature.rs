@@ -640,40 +640,33 @@ impl Subpacket {
 
         match *self {
             Subpacket::SignatureCreationTime(time) => {
-                // Subpacket type
-                out.push(2);
+                out.push(SubpacketType::SignatureCreationTime as u8);
                 out.write_u32::<BigEndian>(time.as_secs() as u32)?;
             }
             Subpacket::SignatureExpirationTime(time) => {
-                // Subpacket type
-                out.push(3);
+                out.push(SubpacketType::SignatureExpirationTime as u8);
                 out.write_u32::<BigEndian>(time.as_secs() as u32)?;
             }
             Subpacket::ExportableCertification(exportable) => {
-                // Subpacket type
-                out.push(4);
+                out.push(SubpacketType::ExportableCertification as u8);
                 out.push(exportable as u8);
             }
             Subpacket::Revocable(revocable) => {
-                // Subpacket type
-                out.push(7);
+                out.push(SubpacketType::Revocable as u8);
                 out.push(revocable as u8);
             }
             Subpacket::Issuer(issuer) => {
-                // Subpacket type
-                out.push(16);
+                out.push(SubpacketType::Issuer as u8);
                 out.write_u64::<BigEndian>(issuer)?;
             }
             Subpacket::PreferredHashAlgorithms(ref algos) => {
-                // Subpacket type
-                out.push(21);
+                out.push(SubpacketType::PreferredHashAlgorithms as u8);
                 for algo in algos {
                     out.push(*algo as u8);
                 }
             }
             Subpacket::PrimaryUserId(primary) => {
-                // Subpacket type
-                out.push(25);
+                out.push(SubpacketType::PrimaryUserId as u8);
                 out.push(primary as u8);
             }
             _ => {}
@@ -717,30 +710,31 @@ pub enum SignatureError {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
 enum SubpacketType {
-    SignatureCreationTime,
-    SignatureExpirationTime,
-    ExportableCertification,
-    TrustSignature,
-    RegularExpression,
-    Revocable,
-    KeyExpirationTime,
-    PreferredSymmetricAlgorithms,
-    RevocationKey,
-    Issuer,
-    NotationData,
-    PreferredHashAlgorithms,
-    PreferredCompressionAlgorithms,
-    KeyServerPreferences,
-    PreferredKeyServer,
-    PrimaryUserId,
-    PolicyUri,
-    KeyFlags,
-    SignerUserId,
-    RevocationReason,
-    Features,
-    SignatureTarget,
-    EmbeddedSignature,
+    SignatureCreationTime = 2,
+    SignatureExpirationTime = 3,
+    ExportableCertification = 4,
+    TrustSignature = 5,
+    RegularExpression = 6,
+    Revocable = 7,
+    KeyExpirationTime = 9,
+    PreferredSymmetricAlgorithms = 11,
+    RevocationKey = 12,
+    Issuer = 16,
+    NotationData = 20,
+    PreferredHashAlgorithms = 21,
+    PreferredCompressionAlgorithms = 22,
+    KeyServerPreferences = 23,
+    PreferredKeyServer = 24,
+    PrimaryUserId = 25,
+    PolicyUri = 26,
+    KeyFlags = 27,
+    SignerUserId = 28,
+    RevocationReason = 29,
+    Features = 30,
+    SignatureTarget = 31,
+    EmbeddedSignature = 32,
     Reserved,
     Unknown,
 }
