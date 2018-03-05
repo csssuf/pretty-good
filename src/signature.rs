@@ -21,7 +21,7 @@ named!(
         signer: be_u64 >>
         pubkey_algo: be_u8 >>
         hash_algo: be_u8 >>
-        take!(2) >>
+        payload_hash: take!(2) >>
         signature: call!(rest) >>
         (SignaturePacket {
             sig_type: SignatureType::from(signature_type),
@@ -32,7 +32,7 @@ named!(
             hashed_subpackets: Vec::new(),
             unhashed_subpackets: Vec::new(),
             signature_contents: Vec::from(signature),
-            payload_hash: RefCell::new(None),
+            payload_hash: RefCell::new(Some([payload_hash[0], payload_hash[1]])),
         })
     )
 );
@@ -158,7 +158,7 @@ named!(
         hash_algo: be_u8 >>
         hashed_subs: length_value!(be_u16, subpackets) >>
         unhashed_subs: length_value!(be_u16, subpackets) >>
-        take!(2) >>
+        payload_hash: take!(2) >>
         signature: call!(rest) >>
         (SignaturePacket {
             sig_type: SignatureType::from(signature_type),
@@ -169,7 +169,7 @@ named!(
             hashed_subpackets: hashed_subs,
             unhashed_subpackets: unhashed_subs,
             signature_contents: Vec::from(signature),
-            payload_hash: RefCell::new(None),
+            payload_hash: RefCell::new(Some([payload_hash[0], payload_hash[1]])),
         })
     )
 );
@@ -187,7 +187,7 @@ pub struct SignaturePacket {
     pub hashed_subpackets: Vec<Subpacket>,
     pub unhashed_subpackets: Vec<Subpacket>,
     signature_contents: Vec<u8>,
-    payload_hash: RefCell<Option<Vec<u8>>>,
+    payload_hash: RefCell<Option<[u8; 2]>>,
 }
 
 impl SignaturePacket {
@@ -413,7 +413,9 @@ impl SignaturePacket {
         signing_payload.extend(&suffix);
 
         let hash = self.hash_algo.hash(signing_payload)?;
-        self.payload_hash.replace(Some(hash.clone()));
+        if hash.len() >= 2 {
+            self.payload_hash.replace(Some([hash[0], hash[1]]));
+        }
 
         Ok(hash)
     }
@@ -434,7 +436,7 @@ impl SignaturePacket {
         header.extend(&unhashed_subpackets_bytes);
 
         match *self.payload_hash.borrow() {
-            Some(ref hash) => {
+            Some(hash) => {
                 header.push(hash[0]);
                 header.push(hash[1]);
             }
