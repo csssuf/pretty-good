@@ -644,10 +644,37 @@ impl Subpacket {
                 out.push(2);
                 out.write_u32::<BigEndian>(time.as_secs() as u32)?;
             }
+            Subpacket::SignatureExpirationTime(time) => {
+                // Subpacket type
+                out.push(3);
+                out.write_u32::<BigEndian>(time.as_secs() as u32)?;
+            }
+            Subpacket::ExportableCertification(exportable) => {
+                // Subpacket type
+                out.push(4);
+                out.push(exportable as u8);
+            }
+            Subpacket::Revocable(revocable) => {
+                // Subpacket type
+                out.push(7);
+                out.push(revocable as u8);
+            }
             Subpacket::Issuer(issuer) => {
                 // Subpacket type
                 out.push(16);
                 out.write_u64::<BigEndian>(issuer)?;
+            }
+            Subpacket::PreferredHashAlgorithms(ref algos) => {
+                // Subpacket type
+                out.push(21);
+                for algo in algos {
+                    out.push(*algo as u8);
+                }
+            }
+            Subpacket::PrimaryUserId(primary) => {
+                // Subpacket type
+                out.push(25);
+                out.push(primary as u8);
             }
             _ => {}
         }
