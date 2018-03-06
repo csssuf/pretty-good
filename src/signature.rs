@@ -61,6 +61,27 @@ fn subpacket_length(inp: &[u8]) -> IResult<&[u8], u32> {
     }
 }
 
+fn parse_time_subpacket<T>(mut inp: &[u8]) -> Result<Duration, NomErr<T>> {
+    inp.read_u32::<BigEndian>()
+        .map(|seconds| Duration::from_secs(u64::from(seconds)))
+        .map_err(|_| NomErr::Code(ErrorKind::Custom(NomError::IntegerReadError as u32)))
+}
+
+fn parse_keyid_subpacket<T>(mut inp: &[u8]) -> Result<u64, NomErr<T>> {
+    inp.read_u64::<BigEndian>()
+        .map_err(|_| NomErr::Code(ErrorKind::Custom(NomError::IntegerReadError as u32)))
+}
+
+fn parse_hash_algorithms(inp: &[u8]) -> Vec<HashAlgorithm> {
+    inp.into_iter()
+        .map(|val| HashAlgorithm::from(*val))
+        .collect::<Vec<_>>()
+}
+
+fn parse_bool(inp: &[u8]) -> bool {
+    inp[0] != 0
+}
+
 fn parse_subpacket(inp: &[u8]) -> IResult<&[u8], Subpacket> {
     let (remaining, length) = match subpacket_length(inp) {
         IResult::Done(remaining, length) => (remaining, length),
@@ -74,55 +95,45 @@ fn parse_subpacket(inp: &[u8]) -> IResult<&[u8], Subpacket> {
         IResult::Incomplete(i) => return IResult::Incomplete(i),
     };
 
-    let (remaining, mut packet_contents) = match take!(remaining, length - 1) {
+    let (remaining, packet_contents) = match take!(remaining, length - 1) {
         IResult::Done(remaining, contents) => (remaining, contents),
         IResult::Error(e) => return IResult::Error(e),
         IResult::Incomplete(i) => return IResult::Incomplete(i),
     };
 
-    match subpacket_type {
-        0 | 1 | 8 | 13 | 14 | 15 | 17 | 18 | 19 => IResult::Error(NomErr::Code(
-            ErrorKind::Custom(NomError::UseOfReservedValue as u32),
-        )),
-        2 => {
-            let time_secs = match packet_contents.read_u32::<BigEndian>() {
-                Ok(val) => val,
-                Err(_) => {
-                    return IResult::Error(NomErr::Code(ErrorKind::Custom(
-                        NomError::IntegerReadError as u32,
-                    )))
-                }
-            };
-            let subpacket =
-                Subpacket::SignatureCreationTime(Duration::from_secs(u64::from(time_secs)));
-            IResult::Done(remaining, subpacket)
-        }
-        3 => {
-            let time_secs = match packet_contents.read_u32::<BigEndian>() {
-                Ok(val) => val,
-                Err(_) => {
-                    return IResult::Error(NomErr::Code(ErrorKind::Custom(
-                        NomError::IntegerReadError as u32,
-                    )))
-                }
-            };
-            let subpacket =
-                Subpacket::SignatureExpirationTime(Duration::from_secs(u64::from(time_secs)));
-            IResult::Done(remaining, subpacket)
-        }
-        16 => {
-            let issuer = match packet_contents.read_u64::<BigEndian>() {
-                Ok(val) => val,
-                Err(_) => {
-                    return IResult::Error(NomErr::Code(ErrorKind::Custom(
-                        NomError::IntegerReadError as u32,
-                    )))
-                }
-            };
-            let subpacket = Subpacket::Issuer(issuer);
-            IResult::Done(remaining, subpacket)
-        }
-        t => IResult::Done(remaining, Subpacket::Unknown(t, length)),
+    match SubpacketType::from(subpacket_type) {
+        SubpacketType::Reserved => IResult::Error(NomErr::Code(ErrorKind::Custom(
+            NomError::UseOfReservedValue as u32,
+        ))),
+        SubpacketType::SignatureCreationTime => parse_time_subpacket(packet_contents)
+            .map(|time| IResult::Done(remaining, Subpacket::SignatureCreationTime(time)))
+            .unwrap_or_else(IResult::Error),
+        SubpacketType::SignatureExpirationTime => parse_time_subpacket(packet_contents)
+            .map(|time| IResult::Done(remaining, Subpacket::SignatureExpirationTime(time)))
+            .unwrap_or_else(IResult::Error),
+        SubpacketType::ExportableCertification => IResult::Done(
+            remaining,
+            Subpacket::ExportableCertification(parse_bool(packet_contents))
+        ),
+        SubpacketType::Revocable => IResult::Done(
+            remaining,
+            Subpacket::Revocable(parse_bool(packet_contents))
+        ),
+        SubpacketType::KeyExpirationTime => parse_time_subpacket(packet_contents)
+            .map(|time| IResult::Done(remaining, Subpacket::KeyExpirationTime(time)))
+            .unwrap_or_else(IResult::Error),
+        SubpacketType::Issuer => parse_keyid_subpacket(packet_contents)
+            .map(|key_id| IResult::Done(remaining, Subpacket::Issuer(key_id)))
+            .unwrap_or_else(IResult::Error),
+        SubpacketType::PreferredHashAlgorithms => IResult::Done(
+            remaining,
+            Subpacket::PreferredHashAlgorithms(parse_hash_algorithms(packet_contents)),
+        ),
+        SubpacketType::PrimaryUserId => IResult::Done(
+            remaining,
+            Subpacket::PrimaryUserId(parse_bool(packet_contents)),
+        ),
+        _ => IResult::Done(remaining, Subpacket::Unknown(subpacket_type, length)),
     }
 }
 
@@ -350,6 +361,49 @@ impl SignaturePacket {
         self.signer = Some(signer);
     }
 
+    /// Retrieve the preferred hash algorithms of this signature.
+    pub fn preferred_hash_algorithms(&self) -> Option<Vec<HashAlgorithm>> {
+        for subpacket in &self.hashed_subpackets {
+            if let Subpacket::PreferredHashAlgorithms(ref algos) = *subpacket {
+                return Some(algos.clone());
+            }
+        }
+
+        for subpacket in &self.unhashed_subpackets {
+            if let Subpacket::PreferredHashAlgorithms(ref algos) = *subpacket {
+                return Some(algos.clone());
+            }
+        }
+
+        None
+    }
+
+    /// Set the preferred hash algorithms of this signature. If `hashed` is true, this subpacket
+    /// will be added as a hashed subpacket.
+    pub fn set_preferred_hash_algorithms<T: AsRef<[HashAlgorithm]>>(&mut self, algos: T, hashed: bool) {
+        self.hashed_subpackets.retain(|subpacket| {
+            if let Subpacket::PreferredHashAlgorithms(_) = *subpacket {
+                false
+            } else {
+                true
+            }
+        });
+        self.unhashed_subpackets.retain(|subpacket| {
+            if let Subpacket::PreferredHashAlgorithms(_) = *subpacket {
+                false
+            } else {
+                true
+            }
+        });
+
+        let algos = Subpacket::PreferredHashAlgorithms(Vec::from(algos.as_ref()));
+        if hashed {
+            self.hashed_subpackets.push(algos);
+        } else {
+            self.unhashed_subpackets.push(algos);
+        }
+    }
+
     fn common_header(&self) -> Result<Vec<u8>, Error> {
         let mut header = Vec::new();
 
@@ -556,20 +610,20 @@ impl From<SignatureType> for u8 {
 pub enum Subpacket {
     SignatureCreationTime(Duration),
     SignatureExpirationTime(Duration),
-    ExportableCertification,
+    ExportableCertification(bool),
     TrustSignature,
     RegularExpression,
-    Revocable,
+    Revocable(bool),
     KeyExpirationTime(Duration),
     PreferredSymmetricAlgorithms,
     RevocationKey,
     Issuer(u64),
     NotationData,
-    PreferredHashAlgorithms,
+    PreferredHashAlgorithms(Vec<HashAlgorithm>),
     PreferredCompressionAlgorithms,
     KeyServerPreferences,
     PreferredKeyServer,
-    PrimaryUserId,
+    PrimaryUserId(bool),
     PolicyUri,
     KeyFlags,
     SignerUserId,
@@ -586,14 +640,34 @@ impl Subpacket {
 
         match *self {
             Subpacket::SignatureCreationTime(time) => {
-                // Subpacket type
-                out.push(2);
+                out.push(SubpacketType::SignatureCreationTime as u8);
                 out.write_u32::<BigEndian>(time.as_secs() as u32)?;
             }
+            Subpacket::SignatureExpirationTime(time) => {
+                out.push(SubpacketType::SignatureExpirationTime as u8);
+                out.write_u32::<BigEndian>(time.as_secs() as u32)?;
+            }
+            Subpacket::ExportableCertification(exportable) => {
+                out.push(SubpacketType::ExportableCertification as u8);
+                out.push(exportable as u8);
+            }
+            Subpacket::Revocable(revocable) => {
+                out.push(SubpacketType::Revocable as u8);
+                out.push(revocable as u8);
+            }
             Subpacket::Issuer(issuer) => {
-                // Subpacket type
-                out.push(16);
+                out.push(SubpacketType::Issuer as u8);
                 out.write_u64::<BigEndian>(issuer)?;
+            }
+            Subpacket::PreferredHashAlgorithms(ref algos) => {
+                out.push(SubpacketType::PreferredHashAlgorithms as u8);
+                for algo in algos {
+                    out.push(*algo as u8);
+                }
+            }
+            Subpacket::PrimaryUserId(primary) => {
+                out.push(SubpacketType::PrimaryUserId as u8);
+                out.push(primary as u8);
             }
             _ => {}
         }
@@ -633,4 +707,66 @@ pub enum SignatureError {
     Unusable { reason: String },
     #[fail(display = "Malformed MPI payload")]
     MalformedMpi,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+enum SubpacketType {
+    SignatureCreationTime = 2,
+    SignatureExpirationTime = 3,
+    ExportableCertification = 4,
+    TrustSignature = 5,
+    RegularExpression = 6,
+    Revocable = 7,
+    KeyExpirationTime = 9,
+    PreferredSymmetricAlgorithms = 11,
+    RevocationKey = 12,
+    Issuer = 16,
+    NotationData = 20,
+    PreferredHashAlgorithms = 21,
+    PreferredCompressionAlgorithms = 22,
+    KeyServerPreferences = 23,
+    PreferredKeyServer = 24,
+    PrimaryUserId = 25,
+    PolicyUri = 26,
+    KeyFlags = 27,
+    SignerUserId = 28,
+    RevocationReason = 29,
+    Features = 30,
+    SignatureTarget = 31,
+    EmbeddedSignature = 32,
+    Reserved,
+    Unknown,
+}
+
+impl From<u8> for SubpacketType {
+    fn from(t: u8) -> SubpacketType {
+        match t {
+            0 | 1 | 8 | 13 | 14 | 15 | 17 | 18 | 19 => SubpacketType::Reserved,
+            2 => SubpacketType::SignatureCreationTime,
+            3 => SubpacketType::SignatureExpirationTime,
+            4 => SubpacketType::ExportableCertification,
+            5 => SubpacketType::TrustSignature,
+            6 => SubpacketType::RegularExpression,
+            7 => SubpacketType::Revocable,
+            9 => SubpacketType::KeyExpirationTime,
+            11 => SubpacketType::PreferredSymmetricAlgorithms,
+            12 => SubpacketType::RevocationKey,
+            16 => SubpacketType::Issuer,
+            20 => SubpacketType::NotationData,
+            21 => SubpacketType::PreferredHashAlgorithms,
+            22 => SubpacketType::PreferredCompressionAlgorithms,
+            23 => SubpacketType::KeyServerPreferences,
+            24 => SubpacketType::PreferredKeyServer,
+            25 => SubpacketType::PrimaryUserId,
+            26 => SubpacketType::PolicyUri,
+            27 => SubpacketType::KeyFlags,
+            28 => SubpacketType::SignerUserId,
+            29 => SubpacketType::RevocationReason,
+            30 => SubpacketType::Features,
+            31 => SubpacketType::SignatureTarget,
+            32 => SubpacketType::EmbeddedSignature,
+            _ => SubpacketType::Unknown,
+        }
+    }
 }
