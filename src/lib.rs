@@ -17,8 +17,6 @@
 //! [`Packet::to_bytes`]: enum.Packet.html#method.to_bytes
 //! [`Packet::from_bytes`]: enum.Packet.html#method.from_bytes
 //! [`SignaturePacket`]: struct.SignaturePacket.html
-#[macro_use]
-extern crate simple_asn1;
 extern crate byteorder;
 extern crate digest;
 #[macro_use]
@@ -32,6 +30,7 @@ extern crate num;
 extern crate ripemd160;
 extern crate sha1;
 extern crate sha2;
+extern crate yasna;
 
 mod packet;
 mod signature;
