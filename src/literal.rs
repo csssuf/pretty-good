@@ -35,6 +35,9 @@ named!(
     )
 );
 
+/// A Literal data packet as specified in [RFC4880 &sect;5.9].
+///
+/// [RFC4880 &sect;5.9]: https://tools.ietf.org/html/rfc4880#section-5.9
 #[derive(Clone, Debug)]
 pub struct LiteralPacket {
     pub filename: String,
@@ -88,6 +91,9 @@ impl LiteralPacket {
     }
 }
 
+/// The contents of a [`LiteralPacket`].
+///
+/// [`LiteralPacket`]: struct.LiteralPacket.html
 #[derive(Clone, Debug)]
 pub enum LiteralData {
     Binary(Vec<u8>),
@@ -106,6 +112,9 @@ impl LiteralData {
     }
 }
 
+/// Error type for [`LiteralPacket`]-level errors.
+///
+/// [`LiteralPacket`]: struct.LiteralPacket.html
 #[derive(Debug, Fail)]
 pub enum LiteralError {
     #[fail(display = "Invalid literal format: {}", reason)]
