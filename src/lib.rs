@@ -32,10 +32,12 @@ extern crate sha1;
 extern crate sha2;
 extern crate yasna;
 
+mod literal;
 mod packet;
 mod signature;
 mod types;
 
+pub use literal::*;
 pub use packet::*;
 pub use signature::*;
 pub use types::*;
