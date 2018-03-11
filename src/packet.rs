@@ -4,6 +4,7 @@ use nom::{ErrorKind, be_u16, be_u32, be_u8};
 use nom::Err as NomErr;
 use nom::IResult;
 
+use literal::*;
 use signature::*;
 use types::NomError;
 
@@ -101,7 +102,7 @@ pub enum Packet {
     CompressedData,
     SymmetricEncryptedData,
     Marker,
-    LiteralData,
+    LiteralData(LiteralPacket),
     Trust,
     UserId,
     PublicSubkey,
@@ -123,7 +124,7 @@ impl Packet {
             Packet::CompressedData => 8,
             Packet::SymmetricEncryptedData => 9,
             Packet::Marker => 10,
-            Packet::LiteralData => 11,
+            Packet::LiteralData(_) => 11,
             Packet::Trust => 12,
             Packet::UserId => 13,
             Packet::PublicSubkey => 14,
@@ -138,6 +139,7 @@ impl Packet {
 
         let body = match self {
             &Packet::Signature(ref signature) => signature.to_bytes()?,
+            &Packet::LiteralData(ref data) => data.to_bytes()?,
             p => bail!(PacketError::UnimplementedType { packet_type: format!("{:?}", p) }),
         };
 
@@ -196,7 +198,7 @@ impl Packet {
             8 => Packet::CompressedData,
             9 => Packet::SymmetricEncryptedData,
             10 => Packet::Marker,
-            11 => Packet::LiteralData,
+            11 => Packet::LiteralData(LiteralPacket::from_bytes(packet_data)?),
             12 => Packet::Trust,
             13 => Packet::UserId,
             14 => Packet::PublicSubkey,
