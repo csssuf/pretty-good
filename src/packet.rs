@@ -6,6 +6,7 @@ use nom::IResult;
 
 use compression::*;
 use literal::*;
+use marker;
 use signature::*;
 use types::NomError;
 
@@ -141,6 +142,7 @@ impl Packet {
         let body = match self {
             &Packet::Signature(ref signature) => signature.to_bytes()?,
             &Packet::CompressedData(ref cdata) => cdata.to_bytes()?,
+            &Packet::Marker => Vec::from(marker::MARKER_PACKET),
             &Packet::LiteralData(ref data) => data.to_bytes()?,
             p => bail!(PacketError::UnimplementedType { packet_type: format!("{:?}", p) }),
         };
@@ -199,7 +201,10 @@ impl Packet {
             7 => Packet::SecretSubkey,
             8 => Packet::CompressedData(CompressedDataPacket::from_bytes(packet_data)?),
             9 => Packet::SymmetricEncryptedData,
-            10 => Packet::Marker,
+            10 => {
+                marker::verify_marker(packet_data)?;
+                Packet::Marker
+            }
             11 => Packet::LiteralData(LiteralPacket::from_bytes(packet_data)?),
             12 => Packet::Trust,
             13 => Packet::UserId,
