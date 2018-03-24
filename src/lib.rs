@@ -34,11 +34,13 @@ extern crate sha1;
 extern crate sha2;
 extern crate yasna;
 
+mod compression;
 mod literal;
 mod packet;
 mod signature;
 mod types;
 
+pub use compression::*;
 pub use literal::*;
 pub use packet::*;
 pub use signature::*;
