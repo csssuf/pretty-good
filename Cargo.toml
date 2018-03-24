@@ -11,9 +11,11 @@ license = "Apache-2.0"
 
 [dependencies]
 byteorder = "1.2"
+bzip2 = "0.3"
 digest = "0.7"
 failure = "0.1"
 failure_derive = "0.1"
+flate2 = "1"
 md-5 = "0.7"
 num = "0.1.40"
 ripemd160 = "0.7"

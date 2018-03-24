@@ -18,11 +18,13 @@
 //! [`Packet::from_bytes`]: enum.Packet.html#method.from_bytes
 //! [`SignaturePacket`]: struct.SignaturePacket.html
 extern crate byteorder;
+extern crate bzip2;
 extern crate digest;
 #[macro_use]
 extern crate failure;
 #[macro_use]
 extern crate failure_derive;
+extern crate flate2;
 extern crate md5;
 #[macro_use]
 extern crate nom;
