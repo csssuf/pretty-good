@@ -36,6 +36,7 @@ extern crate yasna;
 
 mod compression;
 mod literal;
+mod marker;
 mod packet;
 mod signature;
 mod types;
