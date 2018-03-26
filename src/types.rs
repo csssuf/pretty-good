@@ -141,6 +141,41 @@ impl HashAlgorithm {
     }
 }
 
+/// Type for symmetric key algorithms supported by OpenPGP.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum SymmetricKeyAlgorithm {
+    Plaintext = 0,
+    Idea = 1,
+    TripleDes = 2,
+    Cast5 = 3,
+    Blowfish = 4,
+    Aes128 = 7,
+    Aes192 = 8,
+    Aes256 = 9,
+    Twofish = 10,
+    Reserved,
+    Unknown,
+}
+
+impl From<u8> for SymmetricKeyAlgorithm {
+    fn from(val: u8) -> SymmetricKeyAlgorithm {
+        match val {
+            0 => SymmetricKeyAlgorithm::Plaintext,
+            1 => SymmetricKeyAlgorithm::Idea,
+            2 => SymmetricKeyAlgorithm::TripleDes,
+            3 => SymmetricKeyAlgorithm::Cast5,
+            4 => SymmetricKeyAlgorithm::Blowfish,
+            7 => SymmetricKeyAlgorithm::Aes128,
+            8 => SymmetricKeyAlgorithm::Aes192,
+            9 => SymmetricKeyAlgorithm::Aes256,
+            10 => SymmetricKeyAlgorithm::Twofish,
+            5 | 6 => SymmetricKeyAlgorithm::Reserved,
+            _ => SymmetricKeyAlgorithm::Unknown,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub(crate) enum NomError {
