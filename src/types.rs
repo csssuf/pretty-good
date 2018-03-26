@@ -158,6 +158,22 @@ pub enum SymmetricKeyAlgorithm {
     Unknown,
 }
 
+impl SymmetricKeyAlgorithm {
+    /// The block size of this cipher in bytes.
+    pub fn block_bytes(&self) -> usize {
+        match *self {
+            SymmetricKeyAlgorithm::Plaintext => 0,
+            SymmetricKeyAlgorithm::Idea => 8,
+            SymmetricKeyAlgorithm::TripleDes => 8,
+            SymmetricKeyAlgorithm::Cast5 => 8,
+            SymmetricKeyAlgorithm::Blowfish => 8,
+            SymmetricKeyAlgorithm::Aes128 | SymmetricKeyAlgorithm::Aes192 | SymmetricKeyAlgorithm::Aes256 => 16,
+            SymmetricKeyAlgorithm::Twofish => 16,
+            SymmetricKeyAlgorithm::Reserved | SymmetricKeyAlgorithm::Unknown => 0,
+        }
+    }
+}
+
 impl From<u8> for SymmetricKeyAlgorithm {
     fn from(val: u8) -> SymmetricKeyAlgorithm {
         match val {
