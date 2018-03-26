@@ -9,6 +9,7 @@ use nom::Err as NomErr;
 use num::BigUint;
 
 use types::*;
+use util::parse_time_subpacket;
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
 named!(
@@ -59,12 +60,6 @@ fn subpacket_length(inp: &[u8]) -> IResult<&[u8], u32> {
     } else {
         be_u32(remaining)
     }
-}
-
-fn parse_time_subpacket<T>(mut inp: &[u8]) -> Result<Duration, NomErr<T>> {
-    inp.read_u32::<BigEndian>()
-        .map(|seconds| Duration::from_secs(u64::from(seconds)))
-        .map_err(|_| NomErr::Code(ErrorKind::Custom(NomError::IntegerReadError as u32)))
 }
 
 fn parse_keyid_subpacket<T>(mut inp: &[u8]) -> Result<u64, NomErr<T>> {

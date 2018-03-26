@@ -41,6 +41,7 @@ mod packet;
 mod signature;
 mod types;
 mod userid;
+mod util;
 
 pub use compression::*;
 pub use literal::*;
