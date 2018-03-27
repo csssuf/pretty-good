@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use byteorder::{BigEndian, WriteBytesExt};
 use failure::Error;
 use nom::{be_u16, be_u8, ErrorKind, IResult};
 use nom::Err as NomErr;
@@ -239,6 +240,41 @@ impl Key {
 
         Ok(key)
     }
+
+    pub fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut out = Vec::new();
+
+        out.push(4u8);
+        out.write_u32::<BigEndian>(self.creation_time.as_secs() as u32)?;
+        out.push(self.pubkey_algorithm as u8);
+        out.extend(&self.key_material.public_to_bytes()?);
+
+        let private_bytes = self.key_material.private_to_bytes()?;
+        if !private_bytes.is_empty() {
+            match self.encryption_method {
+                None => bail!(KeyError::InvalidEncryption),
+                Some(KeyEncryptionMethod::Unencrypted) => {
+                    out.push(0u8);
+                    match self.privkey_checksum {
+                        None => bail!(KeyError::BadChecksum),
+                        Some(ref checksum) => {
+                            out.extend(&private_bytes);
+                            out.extend(checksum);
+                        }
+                    }
+                }
+                Some(ref e) => bail!(KeyError::UnimplementedEncryption {
+                    method: format!("{:?}", e),
+                })
+            }
+        }
+
+        Ok(out)
+    }
+
+    pub fn expiration_time(&self) -> Option<Duration> {
+        self.expiration_time
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -246,6 +282,71 @@ pub enum KeyMaterial {
     Rsa(RsaPublicKey, Option<RsaPrivateKey>),
     Dsa(DsaPublicKey, Option<DsaPrivateKey>),
     Elgamal(ElgamalPublicKey, Option<ElgamalPrivateKey>),
+}
+
+impl KeyMaterial {
+    pub fn public_to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut out = Vec::new();
+
+        match self {
+            &KeyMaterial::Rsa(ref public, _) => {
+                out.write_u16::<BigEndian>(public.n.bits() as u16)?;
+                out.extend(&public.n.to_bytes_be());
+                out.write_u16::<BigEndian>(public.e.bits() as u16)?;
+                out.extend(&public.e.to_bytes_be());
+            }
+            &KeyMaterial::Dsa(ref public, _) => {
+                out.write_u16::<BigEndian>(public.p.bits() as u16)?;
+                out.extend(&public.p.to_bytes_be());
+                out.write_u16::<BigEndian>(public.q.bits() as u16)?;
+                out.extend(&public.q.to_bytes_be());
+                out.write_u16::<BigEndian>(public.g.bits() as u16)?;
+                out.extend(&public.g.to_bytes_be());
+                out.write_u16::<BigEndian>(public.y.bits() as u16)?;
+                out.extend(&public.y.to_bytes_be());
+            }
+            &KeyMaterial::Elgamal(ref public, _) => {
+                out.write_u16::<BigEndian>(public.p.bits() as u16)?;
+                out.extend(&public.p.to_bytes_be());
+                out.write_u16::<BigEndian>(public.g.bits() as u16)?;
+                out.extend(&public.g.to_bytes_be());
+                out.write_u16::<BigEndian>(public.y.bits() as u16)?;
+                out.extend(&public.y.to_bytes_be());
+            }
+        }
+
+        Ok(out)
+    }
+
+    pub fn private_to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut out = Vec::new();
+
+        match self {
+            &KeyMaterial::Rsa(_, Some(ref private)) => {
+                out.write_u16::<BigEndian>(private.d.bits() as u16)?;
+                out.extend(&private.d.to_bytes_be());
+                out.write_u16::<BigEndian>(private.p.bits() as u16)?;
+                out.extend(&private.p.to_bytes_be());
+                out.write_u16::<BigEndian>(private.q.bits() as u16)?;
+                out.extend(&private.q.to_bytes_be());
+                out.write_u16::<BigEndian>(private.u.bits() as u16)?;
+                out.extend(&private.u.to_bytes_be());
+            }
+            &KeyMaterial::Dsa(_, Some(DsaPrivateKey(ref private))) => {
+                out.write_u16::<BigEndian>(private.bits() as u16)?;
+                out.extend(&private.to_bytes_be());
+            }
+            &KeyMaterial::Elgamal(_, Some(ElgamalPrivateKey(ref private))) => {
+                out.write_u16::<BigEndian>(private.bits() as u16)?;
+                out.extend(&private.to_bytes_be());
+            }
+            &KeyMaterial::Rsa(_, None)
+            | &KeyMaterial::Dsa(_, None)
+            | &KeyMaterial::Elgamal(_, None) => {}
+        }
+
+        Ok(out)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -295,6 +396,12 @@ pub struct ElgamalPrivateKey(BigUint);
 pub enum KeyError {
     #[fail(display = "Invalid key format: {}", reason)]
     InvalidFormat { reason: String },
+    #[fail(display = "Invalid/no encryption set")]
+    InvalidEncryption,
+    #[fail(display = "Bad checksum")]
+    BadChecksum,
+    #[fail(display = "Unimplemented key encryption method: {}", method)]
+    UnimplementedEncryption { method: String },
     #[fail(display = "Malformed MPI payload")]
     MalformedMpi,
 }
