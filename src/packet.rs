@@ -143,10 +143,14 @@ impl Packet {
 
         let body = match self {
             &Packet::Signature(ref signature) => signature.to_bytes()?,
+            &Packet::SecretKey(ref key) => key.to_bytes()?,
+            &Packet::PublicKey(ref key) => key.to_bytes()?,
+            &Packet::SecretSubkey(ref key) => key.to_bytes()?,
             &Packet::CompressedData(ref cdata) => cdata.to_bytes()?,
             &Packet::Marker => Vec::from(marker::MARKER_PACKET),
             &Packet::LiteralData(ref data) => data.to_bytes()?,
             &Packet::UserId(ref id) => Vec::from(id.as_bytes()),
+            &Packet::PublicSubkey(ref key) => key.to_bytes()?,
             p => bail!(PacketError::UnimplementedType { packet_type: format!("{:?}", p) }),
         };
 
@@ -199,9 +203,9 @@ impl Packet {
             2 => Packet::Signature(SignaturePacket::from_bytes(packet_data)?),
             3 => Packet::SymmetricKeySessionKey,
             4 => Packet::OnePassSignature,
-            5 => Packet::SecretKey(Key::from_bytes(packet_data, false)?),
-            6 => Packet::PublicKey(Key::from_bytes(packet_data, false)?),
-            7 => Packet::SecretSubkey(Key::from_bytes(packet_data, true)?),
+            5 => Packet::SecretKey(Key::from_bytes(packet_data)?),
+            6 => Packet::PublicKey(Key::from_bytes(packet_data)?),
+            7 => Packet::SecretSubkey(Key::from_bytes(packet_data)?),
             8 => Packet::CompressedData(CompressedDataPacket::from_bytes(packet_data)?),
             9 => Packet::SymmetricEncryptedData,
             10 => {
@@ -211,7 +215,7 @@ impl Packet {
             11 => Packet::LiteralData(LiteralPacket::from_bytes(packet_data)?),
             12 => Packet::Trust,
             13 => Packet::UserId(userid::parse_userid(packet_data)?),
-            14 => Packet::PublicSubkey(Key::from_bytes(packet_data, true)?),
+            14 => Packet::PublicSubkey(Key::from_bytes(packet_data)?),
             17 => Packet::UserAttribute,
             18 => Packet::SymmetricEncryptedIntegrityProtectedData,
             19 => Packet::ModificationDetectionCode,
