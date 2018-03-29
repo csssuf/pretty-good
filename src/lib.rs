@@ -40,6 +40,7 @@ mod marker;
 mod packet;
 mod signature;
 mod types;
+mod userid;
 
 pub use compression::*;
 pub use literal::*;
