@@ -9,6 +9,7 @@ use literal::*;
 use marker;
 use signature::*;
 use types::NomError;
+use userid;
 
 named!(old_tag_format<(&[u8], usize), (u8, &[u8])>,
     do_parse!(
@@ -106,7 +107,7 @@ pub enum Packet {
     Marker,
     LiteralData(LiteralPacket),
     Trust,
-    UserId,
+    UserId(String),
     PublicSubkey,
     UserAttribute,
     SymmetricEncryptedIntegrityProtectedData,
@@ -128,7 +129,7 @@ impl Packet {
             Packet::Marker => 10,
             Packet::LiteralData(_) => 11,
             Packet::Trust => 12,
-            Packet::UserId => 13,
+            Packet::UserId(_) => 13,
             Packet::PublicSubkey => 14,
             Packet::UserAttribute => 17,
             Packet::SymmetricEncryptedIntegrityProtectedData => 18,
@@ -144,6 +145,7 @@ impl Packet {
             &Packet::CompressedData(ref cdata) => cdata.to_bytes()?,
             &Packet::Marker => Vec::from(marker::MARKER_PACKET),
             &Packet::LiteralData(ref data) => data.to_bytes()?,
+            &Packet::UserId(ref id) => Vec::from(id.as_bytes()),
             p => bail!(PacketError::UnimplementedType { packet_type: format!("{:?}", p) }),
         };
 
@@ -207,7 +209,7 @@ impl Packet {
             }
             11 => Packet::LiteralData(LiteralPacket::from_bytes(packet_data)?),
             12 => Packet::Trust,
-            13 => Packet::UserId,
+            13 => Packet::UserId(userid::parse_userid(packet_data)?),
             14 => Packet::PublicSubkey,
             17 => Packet::UserAttribute,
             18 => Packet::SymmetricEncryptedIntegrityProtectedData,
