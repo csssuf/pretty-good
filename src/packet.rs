@@ -172,9 +172,9 @@ impl Packet {
         Ok(out)
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Packet, Error> {
-        let (packet_tag, packet_data) = match pgp_packet_header(bytes) {
-            IResult::Done(_, (tag, data)) => (tag, data),
+    pub fn from_bytes(bytes: &[u8]) -> Result<(Packet, &[u8]), Error> {
+        let (remaining, packet_tag, packet_data) = match pgp_packet_header(bytes) {
+            IResult::Done(remaining, (tag, data)) => (remaining, tag, data),
             IResult::Error(NomErr::Code(ErrorKind::Custom(e))) => {
                 let e = NomError::from(e);
 
@@ -219,7 +219,19 @@ impl Packet {
             }),
         };
 
-        Ok(packet)
+        Ok((packet, remaining))
+    }
+
+    pub fn all_from_bytes(mut bytes: &[u8]) -> Result<Vec<Packet>, Error> {
+        let mut out = Vec::new();
+
+        while !bytes.is_empty() {
+            let (packet, remaining) = Packet::from_bytes(bytes)?;
+            out.push(packet);
+            bytes = remaining;
+        }
+
+        Ok(out)
     }
 }
 
