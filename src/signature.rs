@@ -655,6 +655,10 @@ impl Subpacket {
                 out.push(SubpacketType::Revocable as u8);
                 out.push(revocable as u8);
             }
+            Subpacket::KeyExpirationTime(time) => {
+                out.push(SubpacketType::KeyExpirationTime as u8);
+                out.write_u32::<BigEndian>(time.as_secs() as u32)?;
+            }
             Subpacket::Issuer(issuer) => {
                 out.push(SubpacketType::Issuer as u8);
                 out.write_u64::<BigEndian>(issuer)?;
