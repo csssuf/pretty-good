@@ -133,7 +133,7 @@ fn parse_subpacket(inp: &[u8]) -> IResult<&[u8], Subpacket> {
             remaining,
             Subpacket::PrimaryUserId(parse_bool(packet_contents)),
         ),
-        _ => IResult::Done(remaining, Subpacket::Unknown(subpacket_type, length)),
+        _ => IResult::Done(remaining, Subpacket::Unknown(subpacket_type, Vec::from(packet_contents))),
     }
 }
 
@@ -631,7 +631,7 @@ pub enum Subpacket {
     Features,
     SignatureTarget,
     EmbeddedSignature,
-    Unknown(u8, u32),
+    Unknown(u8, Vec<u8>),
 }
 
 impl Subpacket {
@@ -668,6 +668,10 @@ impl Subpacket {
             Subpacket::PrimaryUserId(primary) => {
                 out.push(SubpacketType::PrimaryUserId as u8);
                 out.push(primary as u8);
+            }
+            Subpacket::Unknown(tag, ref contents) => {
+                out.push(tag);
+                out.extend(contents);
             }
             _ => {}
         }
