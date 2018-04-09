@@ -1,10 +1,13 @@
 use std::time::Duration;
 
 use byteorder::{BigEndian, WriteBytesExt};
+use digest::Digest;
 use failure::Error;
+use md5::Md5;
 use nom::{be_u16, be_u8, ErrorKind, IResult};
 use nom::Err as NomErr;
 use num::BigUint;
+use sha1::Sha1;
 
 use s2k::{StringToKey, s2k};
 use types::*;
@@ -65,6 +68,7 @@ named!(
         rsa_n: pgp_mpi >>
         rsa_e: pgp_mpi >>
         (Key {
+            version: KeyVersion::V3,
             creation_time: created,
             expiration_time: Some(Duration::from_secs(expires_days as u64 * 24 * 60 * 60)),
             pubkey_algorithm: PublicKeyAlgorithm::from(pubkey_algo),
@@ -101,6 +105,7 @@ named!(
                 |k| KeyMaterial::Elgamal(k, None)
             )) >>
         (Key {
+            version: KeyVersion::V4,
             creation_time: created,
             expiration_time: None,
             pubkey_algorithm: PublicKeyAlgorithm::from(pubkey_algorithm),
@@ -211,6 +216,7 @@ fn parse_key(inp: &[u8]) -> IResult<&[u8], Key> {
 
 #[derive(Clone, Debug)]
 pub struct Key {
+    version: KeyVersion,
     pub creation_time: Duration,
     expiration_time: Option<Duration>,
     pub pubkey_algorithm: PublicKeyAlgorithm,
@@ -275,6 +281,36 @@ impl Key {
     pub fn expiration_time(&self) -> Option<Duration> {
         self.expiration_time
     }
+
+    pub fn fingerprint(&self) -> Result<Vec<u8>, Error> {
+        match self.version {
+            KeyVersion::V3 => {
+                let hash_payload = self.key_material.public_to_bytes()?;
+                Ok(Vec::from(Md5::digest(&hash_payload).as_ref()))
+            }
+            KeyVersion::V4 => {
+                let mut hash_payload = Vec::new();
+                hash_payload.push(0x99);
+
+                let mut key_data = Vec::new();
+                key_data.push(0x4);
+                key_data.write_u32::<BigEndian>(self.creation_time.as_secs() as u32)?;
+                key_data.push(self.pubkey_algorithm as u8);
+                key_data.extend(self.key_material.public_to_bytes()?);
+
+                hash_payload.write_u16::<BigEndian>(key_data.len() as u16)?;
+                hash_payload.extend(&key_data);
+
+                Ok(Vec::from(Sha1::digest(&hash_payload).as_ref()))
+            }
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum KeyVersion {
+    V3,
+    V4,
 }
 
 #[derive(Clone, Debug)]
