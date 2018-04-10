@@ -17,6 +17,9 @@
 //! [`Packet::to_bytes`]: enum.Packet.html#method.to_bytes
 //! [`Packet::from_bytes`]: enum.Packet.html#method.from_bytes
 //! [`SignaturePacket`]: struct.SignaturePacket.html
+
+#![feature(refcell_replace_swap)]
+
 extern crate byteorder;
 extern crate bzip2;
 extern crate digest;
