@@ -412,38 +412,38 @@ pub enum KeyEncryptionMethod {
 
 #[derive(Clone, Debug)]
 pub struct RsaPublicKey {
-    n: BigUint,
-    e: BigUint,
+    pub n: BigUint,
+    pub e: BigUint,
 }
 
 #[derive(Clone, Debug)]
 pub struct RsaPrivateKey {
-    d: BigUint,
-    p: BigUint,
-    q: BigUint,
-    u: BigUint,
+    pub d: BigUint,
+    pub p: BigUint,
+    pub q: BigUint,
+    pub u: BigUint,
 }
 
 #[derive(Clone, Debug)]
 pub struct DsaPublicKey {
-    p: BigUint,
-    q: BigUint,
-    g: BigUint,
-    y: BigUint,
+    pub p: BigUint,
+    pub q: BigUint,
+    pub g: BigUint,
+    pub y: BigUint,
 }
 
 #[derive(Clone, Debug)]
-pub struct DsaPrivateKey(BigUint);
+pub struct DsaPrivateKey(pub BigUint);
 
 #[derive(Clone, Debug)]
 pub struct ElgamalPublicKey {
-    p: BigUint,
-    g: BigUint,
-    y: BigUint,
+    pub p: BigUint,
+    pub g: BigUint,
+    pub y: BigUint,
 }
 
 #[derive(Clone, Debug)]
-pub struct ElgamalPrivateKey(BigUint);
+pub struct ElgamalPrivateKey(pub BigUint);
 
 #[derive(Debug, Fail)]
 pub enum KeyError {
