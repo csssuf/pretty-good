@@ -305,6 +305,23 @@ impl Key {
             }
         }
     }
+
+    pub fn id(&self) -> Result<Vec<u8>, Error> {
+        match self.version {
+            KeyVersion::V3 => match self.key_material {
+                KeyMaterial::Rsa(ref pubkey, _) => {
+                    let n = pubkey.n.to_bytes_be();
+                    Ok(Vec::from(&n[n.len() - 8..]))
+                }
+                KeyMaterial::Dsa(_, _) => bail!("v3 DSA keys are unsupported"),
+                KeyMaterial::Elgamal(_, _) => bail!("v3 Elgamal keys are unsupported"),
+            },
+            KeyVersion::V4 => self.fingerprint().map(|mut f| {
+                let len = f.len();
+                f.split_off(len - 8)
+            }),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
