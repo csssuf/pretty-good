@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use byteorder::{BigEndian, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 use digest::Digest;
 use failure::Error;
 use md5::Md5;
@@ -306,8 +306,8 @@ impl Key {
         }
     }
 
-    pub fn id(&self) -> Result<Vec<u8>, Error> {
-        match self.version {
+    pub fn id(&self) -> Result<u64, Error> {
+        let bytes = match self.version {
             KeyVersion::V3 => match self.key_material {
                 KeyMaterial::Rsa(ref pubkey, _) => {
                     let n = pubkey.n.to_bytes_be();
@@ -320,7 +320,9 @@ impl Key {
                 let len = f.len();
                 f.split_off(len - 8)
             }),
-        }
+        }?;
+
+        Ok(BigEndian::read_u64(&bytes))
     }
 }
 
