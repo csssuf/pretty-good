@@ -1,6 +1,6 @@
 [package]
 name = "pretty-good"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["James Forcier <james.forcier@coreos.com>"]
 description = "RFC4880 (OpenPGP Message Format) library"
 repository = "https://github.com/csssuf/pretty-good"
