@@ -1,6 +1,6 @@
 use byteorder::{BigEndian, WriteBytesExt};
 use failure::Error;
-use nom::{ErrorKind, be_u16, be_u32, be_u8};
+use nom::{ErrorKind, be_u16, be_u32, be_u8, rest};
 use nom::Err as NomErr;
 use nom::IResult;
 
@@ -15,13 +15,16 @@ use userid;
 named!(old_tag_format<(&[u8], usize), (u8, &[u8])>,
     do_parse!(
         tag: take_bits!(u8, 4) >>
-        length: switch!(take_bits!(u8, 2),
-            0 => bytes!(map!(be_u8, u32::from)) |
-            1 => bytes!(map!(be_u16, u32::from)) |
-            2 => bytes!(call!(be_u32)) |
-            _ => value!(0)
+        data: switch!(
+            switch!(take_bits!(u8, 2),
+                0 => bytes!(map!(be_u8, u32::from)) |
+                1 => bytes!(map!(be_u16, u32::from)) |
+                2 => bytes!(call!(be_u32)) |
+                _ => value!(0)
+            ),
+            0 => bytes!(call!(rest)) |
+            l => bytes!(take!(l))
         ) >>
-        data: bytes!(take!(length)) >>
         ((tag, data))
     )
 );
