@@ -110,6 +110,15 @@ impl CompressedDataPacket {
 
         Ok(out)
     }
+
+    pub fn contents_as_bytes(&self) -> &[u8] {
+        match *self {
+            CompressedDataPacket::Uncompressed(ref d)
+            | CompressedDataPacket::Zip(ref d)
+            | CompressedDataPacket::Zlib(ref d)
+            | CompressedDataPacket::Bzip2(ref d) => &d
+        }
+    }
 }
 
 #[derive(Debug, Fail)]
