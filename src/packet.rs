@@ -235,7 +235,14 @@ impl Packet {
 
         while !bytes.is_empty() {
             let (packet, remaining) = Packet::from_bytes(bytes)?;
-            out.push(packet);
+
+            if let Packet::CompressedData(compressed_contents) = packet {
+                let mut internal_packets = Packet::all_from_bytes(compressed_contents.contents_as_bytes())?;
+                out.append(&mut internal_packets);
+            } else {
+                out.push(packet);
+            }
+
             bytes = remaining;
         }
 
